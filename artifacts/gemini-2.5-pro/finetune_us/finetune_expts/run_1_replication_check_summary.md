@@ -1,0 +1,25 @@
+# Run 1: Replication Check
+
+- **Hypothesis:** Re-running the baseline experiment will produce a different, hopefully better, result, pointing to data stochasticity as the cause for the initial failure.
+- **Hyperparameters:**
+  - `lr`: 1e-4
+  - `optimizer`: adamw
+  - `weight_decay`: 0.01
+  - `freeze_layers`: 17
+  - `epochs`: 50
+  - `batch_size`: 8
+  - `accumulation_steps`: 16
+  - `warmup_epochs`: 5
+  - `early_stopping`: 15
+  - `tickers`: "^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT"
+- **Results:**
+  - `val_loss`: 0.009418
+  - **Eval MAPE:**
+    - `5d`: 3.5%
+    - `14d`: 3.8%
+    - `30d`: 5.8%
+    - `60d`: 7.8%
+    - `120d`: 13.9%
+- **Comparison to current best (Run 4, 7.40% @ 120d):**
+  - This run is a regression (+6.5pp). It is slightly better than `run_0` (14.5%), confirming minor run-to-run variance, but does not explain the large gap to the expected baseline.
+- **Conclusion:** The large performance gap is not due to random data downloads. The problem is deterministic. My next step is to investigate the finetuning script itself. It's possible a change was made to the script that wasn't reflected in the documentation, causing this regression.

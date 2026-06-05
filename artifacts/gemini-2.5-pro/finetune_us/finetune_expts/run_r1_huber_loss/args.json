@@ -1,0 +1,23 @@
+{
+  "tickers": null,
+  "data_dir": "C:/Users/ylchen/workspace/research_group/artifacts/gemini-2.5-pro/finetune_us/data/run_1_data",
+  "val_ratio": 0.25,
+  "model_id": "google/timesfm-2.5-200m-pytorch",
+  "epochs": 50,
+  "batch_size": 4,
+  "lr": 3e-05,
+  "optimizer": "adamw",
+  "weight_decay": 0.01,
+  "warmup_epochs": 5,
+  "accumulation_steps": 32,
+  "freeze_layers": 23,
+  "early_stopping": 15,
+  "max_context": 512,
+  "min_context": 128,
+  "horizon": 128,
+  "stride": 32,
+  "save_dir": "C:/Users/ylchen/workspace/research_group/artifacts/gemini-2.5-pro/finetune_us/finetune_expts/run_r1_huber_loss",
+  "val_metric": "mse",
+  "seed": null,
+  "huber_delta": 1.0
+}

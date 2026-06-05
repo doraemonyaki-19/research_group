@@ -1,0 +1,10 @@
+C:\Users\ylchen\workspace\timesfm_finetuning\finetune_timesfm.py:392: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = torch.cuda.amp.GradScaler()
+C:\Users\ylchen\workspace\timesfm\.venv\lib\site-packages\torch\amp\grad_scaler.py:132: UserWarning: torch.cuda.amp.GradScaler is enabled, but CUDA is not available.  Disabling.
+  warnings.warn(
+C:\Users\ylchen\workspace\timesfm_finetuning\finetune_timesfm.py:419: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast():
+C:\Users\ylchen\workspace\timesfm\.venv\lib\site-packages\torch\amp\autocast_mode.py:266: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+C:\Users\ylchen\workspace\timesfm_finetuning\finetune_timesfm.py:444: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast():

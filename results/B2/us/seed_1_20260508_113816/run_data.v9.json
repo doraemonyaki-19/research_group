@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "config": "B2",
+    "seed": 1,
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "region": "us",
+    "loop_class": "B2Baseline",
+    "max_turns": 5,
+    "num_researchers": 1,
+    "started_at": "2026-05-08T11:38:16",
+    "completed_at": "2026-05-08T11:38:27"
+  },
+  "result": {
+    "stop_reason": "max_turns",
+    "turns_completed": 5,
+    "directions_explored": 0,
+    "directions_killed": 0,
+    "killed_directions": [],
+    "active_directions": [],
+    "total_input_tokens": 14069,
+    "total_output_tokens": 76,
+    "estimated_cost_usd": 0.043347000000000004
+  },
+  "turn_history": [
+    {
+      "turn": 1,
+      "role": "b2_agent",
+      "output": ""
+    },
+    {
+      "turn": 2,
+      "role": "b2_agent",
+      "output": ""
+    },
+    {
+      "turn": 3,
+      "role": "b2_agent",
+      "output": ""
+    },
+    {
+      "turn": 4,
+      "role": "b2_agent",
+      "output": ""
+    },
+    {
+      "turn": 5,
+      "role": "b2_agent",
+      "output": ""
+    }
+  ]
+}

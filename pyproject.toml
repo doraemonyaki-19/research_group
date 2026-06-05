@@ -1,0 +1,41 @@
+[project]
+name = "research_group"
+version = "0.2.0"
+description = "ResearchGroup: hierarchical multi-agent optimization framework"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["research_group*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q"
+markers = [
+    "smoke: tests that hit the real Anthropic API (skipped unless ANTHROPIC_API_KEY is set)",
+    "slow: tests that take more than ~1s",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+    "E501",  # line length — handled by formatter, not linter
+    "B008",  # function calls in default args (Anthropic SDK pattern)
+]

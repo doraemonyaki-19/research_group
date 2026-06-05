@@ -1,0 +1,60 @@
+experiment,group,val_mse,best_epoch,epochs_trained,lr,batch_size,epochs_target,freeze_layers,max_context,horizon,stride,optimizer,weight_decay,accumulation_steps,seed,tickers_or_data,model_id,notes
+logreturns_normalized_baseline_CONVERGED,gemini-2.5-pro,0.00026084,25,27,3e-05,16,50,17,512,128,32,adamw,,16,,"AAPL,MSFT,AMZN,GOOGL,NVDA,TSLA,META,JPM,V,JNJ,UNH,HD,PG,MA,BAC,DIS,ADBE,PYPL,NFLX,CRM",timesfm-2.5-200m-pytorch,
+logreturns_normalized_baseline_CORRECT_v2,gemini-2.5-pro,0.00026392,12,12,3e-05,16,50,17,512,128,32,adamw,,16,,"AAPL,MSFT,AMZN,GOOGL,NVDA,TSLA,META,JPM,V,JNJ,UNH,HD,PG,MA,BAC,DIS,ADBE,PYPL,NFLX,CRM",timesfm-2.5-200m-pytorch,
+exp_11,finetune_checkpoints,0.00632981,8,10,5e-05,128,10,17,512,64,64,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM",timesfm-2.5-200m-pytorch,
+run_6_freeze_16,gemini-2.5-pro,0.00636238,48,50,0.0001,8,50,16,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run_6_unfreeze_layer,gemini-2.5-pro,0.00653745,43,50,0.0001,8,50,16,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run_r2_t1_unfreeze_l16,gemini-2.5-pro,0.00661151,29,44,0.0001,8,50,16,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run8_freeze16,gemini-2.5-pro,0.00689189,35,50,0.0001,8,50,16,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run_r2_t3_wd_0.02,gemini-2.5-pro,0.00701867,50,50,0.0001,8,50,17,512,128,32,adamw,0.02,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run_9,gemini-2.5-pro,0.00723723,27,42,0.0001,8,50,17,512,128,32,adamw,0.05,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_6,gemini-2.5-pro,0.00739386,37,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_r2_reduce_lr_on_plateau,gemini-2.5-pro,0.00807893,37,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run7_minimal_plus_gspc,gemini-2.5-pro,0.00825425,24,39,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,JNJ,JPM,XOM,PG,CAT,^GSPC",model,starts from exp_11
+run6_minimal_tickers,gemini-2.5-pro,0.00837154,41,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,JNJ,JPM,XOM,PG,CAT",model,starts from exp_11
+run_03_gspc_anchor_freeze17,gemini-2.5-pro,0.00936898,42,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,MSFT,JNJ,JPM,MS,XOM,PG,CAT,WMT",model,starts from exp_11
+run_02_gspc_anchor_unfreeze16,gemini-2.5-pro,0.00948999,40,50,0.0001,8,50,16,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,MSFT,JNJ,JPM,MS,XOM,PG,CAT,WMT",model,starts from exp_11
+run_01_sector_pure,gemini-2.5-pro,0.01102446,45,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,MSFT,JNJ,PFE,JPM,MS,XOM,PG,CAT,WMT",model,starts from exp_11
+logreturns_normalized_baseline,gemini-2.5-pro,0.02099322,3,4,0.0001,8,50,17,512,128,32,adamw,0.01,16,42,"AAPL,MSFT,AMZN,GOOGL,NVDA,TSLA,META,JPM,V,JNJ,UNH,HD,PG,MA,BAC,DIS,ADBE,PYPL,NFLX,CRM,XOM,CVX,PFE,MRK,KO,PEP,WMT,MCD,CSCO,INTC",timesfm-2.5-200m-pytorch,
+full_data_exp3,finetune_checkpoints,0.02990420,4,,5e-05,32,5,12,256,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+full_data_exp4,finetune_checkpoints,0.02990420,4,,5e-05,32,5,12,256,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+subset_exp1,finetune_checkpoints,0.03431138,4,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset_log_returns_subset,timesfm-2.5-200m-pytorch,
+full_data_exp1,finetune_checkpoints,0.03604715,3,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+full_data_exp5,finetune_checkpoints,0.03719719,4,,1e-05,32,5,8,256,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+full_data_exp2,finetune_checkpoints,0.04151820,4,,1e-05,32,5,16,256,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+subset_exp2,finetune_checkpoints,0.04898873,4,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset_log_returns_subset,timesfm-2.5-200m-pytorch,
+r24_exp1,finetune_checkpoints,0.05528415,0,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+full_exp1,finetune_checkpoints,0.05574894,0,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+r20_exp1,finetune_checkpoints,nan,0,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+run_0_baseline,gemini-2.5-pro,0.00726499,47,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_1_wd_0.02,gemini-2.5-pro,0.00792086,43,50,,,,,,,,adamw,,,,,,no args.json
+run_2_scheduler_fix,gemini-2.5-pro,0.00804999,35,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_7,gemini-2.5-pro,0.00860731,28,43,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT, HD, VZ, C, PFE, MRK",model,starts from exp_11
+run_6_sector_focus_with_index,gemini-2.5-pro,0.00911000,38,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT",model,starts from exp_11
+run_1_replication_check,gemini-2.5-pro,0.00941795,34,49,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_5,gemini-2.5-pro,0.00980165,34,49,8e-05,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_7_add_unh,gemini-2.5-pro,0.00993611,32,47,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,JNJ,JPM,XOM,PG,CAT,UNH",model,starts from exp_11
+run_7_relevant_diversity,gemini-2.5-pro,0.00996256,44,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,MSFT,JNJ,JPM,BAC,XOM,PG,CAT,WMT",model,starts from exp_11
+run_8,gemini-2.5-pro,0.01028973,34,49,0.0001,4,50,17,512,128,32,adamw,0.01,32,,"^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT",model,starts from exp_11
+run_r2_t2_freeze_l18,gemini-2.5-pro,0.01030040,30,45,0.0001,8,50,18,512,128,32,adamw,0.01,16,,"^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT",model,starts from exp_11
+run_6_add_gspc,gemini-2.5-pro,0.01118255,44,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,JNJ,JPM,XOM,PG,CAT,^GSPC",model,starts from exp_11
+run_5_sector_focus,gemini-2.5-pro,0.01159923,35,50,0.0001,8,50,17,512,128,32,adamw,0.01,16,,"AAPL,MSFT,JNJ,PFE,JPM,BAC,XOM,SLB,PG,CAT",model,starts from exp_11
+exp_1_lr_5e-5,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_2_lr_1e-4_bs_32,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_3_ctx_1024_hor_256,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_4_wd_0_01,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_5_dow30,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_6_800m,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+exp_7_adafactor,finetune_checkpoints,,,,,,,,,,,adamw,,,,,,no args.json
+preprocessed_exp1,finetune_checkpoints,,,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset_log_returns,timesfm-2.5-200m-pytorch,
+r10_exp1,finetune_checkpoints,,,,1e-05,16,30,17,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r11_exp1,finetune_checkpoints,,,,1e-05,16,30,19,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r12_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r16_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r17_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r18_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r19_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r23_exp1,finetune_checkpoints,,,,1e-05,16,30,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r24_exp2,finetune_checkpoints,,,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+r28_exp1,finetune_checkpoints,,,,1e-05,16,5,16,512,64,,adamw,,,42,data/hf_dataset,timesfm-2.5-200m-pytorch,
+logreturns_normalized_baseline_DEBUG,gemini-2.5-pro,,,,3e-05,1,1,17,512,128,32,adamw,,1,,"AAPL,MSFT,AMZN,GOOGL,NVDA,TSLA,META,JPM,V,JNJ,UNH,HD,PG,MA,BAC,DIS,ADBE,PYPL,NFLX,CRM,XOM,CVX,PFE,MRK,KO,PEP,WMT,MCD,CSCO,INTC",timesfm-2.5-200m-pytorch,

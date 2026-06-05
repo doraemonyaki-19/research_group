@@ -1,0 +1,7 @@
+freeze_layers: 16
+horizon: 64
+learning_rate: 1.0e-05
+max_context: 256
+model_path: google/timesfm-2.5-200m-pytorch
+output_patch_len: 128
+patch_len: 32

@@ -1,0 +1,61 @@
+[cache] ^GSPC: 5027 pts
+[cache] AAPL: 5027 pts
+[cache] JNJ: 5027 pts
+[cache] JPM: 5027 pts
+[cache] XOM: 5027 pts
+[cache] PG: 5027 pts
+[cache] CAT: 5027 pts
+[cache] NEE: 5027 pts
+[cache] AMT: 5027 pts
+[cache] WMT: 5027 pts
+Windows: 1035 train, 345 val
+Params: 231.3M total, 64.1M trainable (17 layers frozen)
+Warmup complete → cosine decay
+Epoch   1/50 | train=0.012166 | val_mse=0.012479 | val_mae=0.079518 | lr=9.99e-05
+  ✓ Best val_mse: 0.012479 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   2/50 | train=0.009883 | val_mse=0.012009 | val_mae=0.078089 | lr=9.96e-05
+  ✓ Best val_mse: 0.012009 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   3/50 | train=0.008246 | val_mse=0.011676 | val_mae=0.077641 | lr=9.91e-05
+  ✓ Best val_mse: 0.011676 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   4/50 | train=0.006276 | val_mse=0.010424 | val_mae=0.073777 | lr=9.84e-05
+  ✓ Best val_mse: 0.010424 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   5/50 | train=0.004668 | val_mse=0.009067 | val_mae=0.068596 | lr=9.74e-05
+  ✓ Best val_mse: 0.009067 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   6/50 | train=0.003614 | val_mse=0.008308 | val_mae=0.066162 | lr=9.62e-05
+  ✓ Best val_mse: 0.008308 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   7/50 | train=0.003030 | val_mse=0.008019 | val_mae=0.065095 | lr=9.47e-05
+  ✓ Best val_mse: 0.008019 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   8/50 | train=0.002645 | val_mse=0.007755 | val_mae=0.064039 | lr=9.31e-05
+  ✓ Best val_mse: 0.007755 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch   9/50 | train=0.002225 | val_mse=0.007634 | val_mae=0.063022 | lr=9.12e-05
+  ✓ Best val_mse: 0.007634 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  10/50 | train=0.001987 | val_mse=0.007485 | val_mae=0.062324 | lr=8.92e-05
+  ✓ Best val_mse: 0.007485 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  11/50 | train=0.001782 | val_mse=0.007293 | val_mae=0.061546 | lr=8.70e-05
+  ✓ Best val_mse: 0.007293 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  12/50 | train=0.001564 | val_mse=0.007345 | val_mae=0.061727 | lr=8.46e-05
+Epoch  13/50 | train=0.001394 | val_mse=0.007249 | val_mae=0.061439 | lr=8.20e-05
+  ✓ Best val_mse: 0.007249 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  14/50 | train=0.001261 | val_mse=0.007161 | val_mae=0.061116 | lr=7.93e-05
+  ✓ Best val_mse: 0.007161 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  15/50 | train=0.001131 | val_mse=0.007095 | val_mae=0.060911 | lr=7.65e-05
+  ✓ Best val_mse: 0.007095 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  16/50 | train=0.001031 | val_mse=0.007069 | val_mae=0.060721 | lr=7.35e-05
+  ✓ Best val_mse: 0.007069 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best
+Epoch  17/50 | train=0.000948 | val_mse=0.007151 | val_mae=0.060952 | lr=7.04e-05
+Epoch  18/50 | train=0.000875 | val_mse=0.007132 | val_mae=0.060964 | lr=6.72e-05
+Epoch  19/50 | train=0.000809 | val_mse=0.007182 | val_mae=0.061179 | lr=6.40e-05
+Epoch  20/50 | train=0.000757 | val_mse=0.007150 | val_mae=0.060922 | lr=6.06e-05
+Epoch  21/50 | train=0.000715 | val_mse=0.007213 | val_mae=0.061280 | lr=5.73e-05
+Epoch  22/50 | train=0.000672 | val_mse=0.007299 | val_mae=0.061548 | lr=5.39e-05
+Epoch  23/50 | train=0.000633 | val_mse=0.007291 | val_mae=0.061636 | lr=5.04e-05
+Epoch  24/50 | train=0.000601 | val_mse=0.007257 | val_mae=0.061374 | lr=4.70e-05
+Epoch  25/50 | train=0.000570 | val_mse=0.007288 | val_mae=0.061535 | lr=4.36e-05
+Epoch  26/50 | train=0.000545 | val_mse=0.007293 | val_mae=0.061652 | lr=4.02e-05
+Epoch  27/50 | train=0.000522 | val_mse=0.007345 | val_mae=0.061804 | lr=3.69e-05
+Epoch  28/50 | train=0.000503 | val_mse=0.007358 | val_mae=0.061910 | lr=3.36e-05
+Epoch  29/50 | train=0.000485 | val_mse=0.007361 | val_mae=0.061902 | lr=3.04e-05
+Epoch  30/50 | train=0.000470 | val_mse=0.007387 | val_mae=0.062040 | lr=2.73e-05
+Epoch  31/50 | train=0.000458 | val_mse=0.007394 | val_mae=0.062090 | lr=2.43e-05
+Early stop: 15 epochs without improvement.
+Training complete. Best mse=0.007069 saved to C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r2_hdecay05\best

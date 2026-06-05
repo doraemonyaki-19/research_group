@@ -1,0 +1,21 @@
+[2026-05-26 09:52:40] --- Running Consolidated Environment Pre-flight Check (V3) ---
+[2026-05-26 09:52:40] Platform: Linux 5.10.16.3-microsoft-standard-WSL2
+[2026-05-26 09:52:40] Python Executable: /usr/bin/python3
+[2026-05-26 09:52:40] 
+[INFO] Checking software dependencies...
+[2026-05-26 09:52:40] Required library 'torch' is not installed.
+[2026-05-26 09:52:40] Required library 'transformers' is not installed.
+[2026-05-26 09:52:40] Required library 'accelerate' is not installed.
+[2026-05-26 09:52:40] Required library 'psutil' is not installed.
+[2026-05-26 09:52:40] Required library 'datasets' is not installed.
+[2026-05-26 09:52:40] Required library 'huggingface_hub' is not installed.
+[2026-05-26 09:52:40] Required library 'timesfm' is not installed or not in python path.
+[2026-05-26 09:52:40] 
+[INFO] Checking hardware resources...
+[2026-05-26 09:52:40] An unexpected error occurred during hardware checks: No module named 'psutil'
+[2026-05-26 09:52:40] 
+[INFO] Logging complete package list for reproducibility...
+[2026-05-26 09:52:40] Could not run `pip freeze`: Command '['/usr/bin/python3', '-m', 'pip', 'freeze']' returned non-zero exit status 1.
+[2026-05-26 09:52:40] 
+--- Final Verdict ---
+[2026-05-26 09:52:40] Environment Check FAILED. See reasons above.

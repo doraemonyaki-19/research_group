@@ -1,0 +1,60 @@
+[cache] ^GSPC: 5027 pts
+[cache] AAPL: 5027 pts
+[cache] JNJ: 5027 pts
+[cache] JPM: 5027 pts
+[cache] XOM: 5027 pts
+[cache] PG: 5027 pts
+[cache] CAT: 5027 pts
+[cache] NEE: 5027 pts
+[cache] AMT: 5027 pts
+[cache] WMT: 5027 pts
+Windows: 1035 train, 345 val
+Params: 231.3M total, 64.1M trainable (17 layers frozen)
+Warmup complete → cosine decay
+Epoch   1/50 | train=0.013639 | val_mse=0.011626 | val_mae=0.075831 | lr=9.99e-05
+  ✓ Best val_mse: 0.011626 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   2/50 | train=0.011136 | val_mse=0.010649 | val_mae=0.072061 | lr=9.96e-05
+  ✓ Best val_mse: 0.010649 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   3/50 | train=0.009245 | val_mse=0.009809 | val_mae=0.069888 | lr=9.91e-05
+  ✓ Best val_mse: 0.009809 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   4/50 | train=0.007358 | val_mse=0.008916 | val_mae=0.066706 | lr=9.84e-05
+  ✓ Best val_mse: 0.008916 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   5/50 | train=0.005814 | val_mse=0.008132 | val_mae=0.063575 | lr=9.74e-05
+  ✓ Best val_mse: 0.008132 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   6/50 | train=0.004556 | val_mse=0.007818 | val_mae=0.062333 | lr=9.62e-05
+  ✓ Best val_mse: 0.007818 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   7/50 | train=0.003558 | val_mse=0.007218 | val_mae=0.060005 | lr=9.47e-05
+  ✓ Best val_mse: 0.007218 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch   8/50 | train=0.002911 | val_mse=0.007276 | val_mae=0.059844 | lr=9.31e-05
+Epoch   9/50 | train=0.002571 | val_mse=0.006597 | val_mae=0.056605 | lr=9.12e-05
+  ✓ Best val_mse: 0.006597 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  10/50 | train=0.002253 | val_mse=0.006683 | val_mae=0.056669 | lr=8.92e-05
+Epoch  11/50 | train=0.001999 | val_mse=0.006526 | val_mae=0.055994 | lr=8.70e-05
+  ✓ Best val_mse: 0.006526 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  12/50 | train=0.001819 | val_mse=0.006598 | val_mae=0.056457 | lr=8.46e-05
+Epoch  13/50 | train=0.001674 | val_mse=0.006393 | val_mae=0.055632 | lr=8.20e-05
+  ✓ Best val_mse: 0.006393 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  14/50 | train=0.001500 | val_mse=0.006460 | val_mae=0.055873 | lr=7.93e-05
+Epoch  15/50 | train=0.001353 | val_mse=0.006390 | val_mae=0.055148 | lr=7.65e-05
+  ✓ Best val_mse: 0.006390 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  16/50 | train=0.001241 | val_mse=0.006309 | val_mae=0.055017 | lr=7.35e-05
+  ✓ Best val_mse: 0.006309 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  17/50 | train=0.001134 | val_mse=0.006229 | val_mae=0.054684 | lr=7.04e-05
+  ✓ Best val_mse: 0.006229 → C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best
+Epoch  18/50 | train=0.001051 | val_mse=0.006405 | val_mae=0.055140 | lr=6.72e-05
+Epoch  19/50 | train=0.000973 | val_mse=0.006345 | val_mae=0.054934 | lr=6.40e-05
+Epoch  20/50 | train=0.000912 | val_mse=0.006410 | val_mae=0.055088 | lr=6.06e-05
+Epoch  21/50 | train=0.000858 | val_mse=0.006391 | val_mae=0.055075 | lr=5.73e-05
+Epoch  22/50 | train=0.000810 | val_mse=0.006453 | val_mae=0.055114 | lr=5.39e-05
+Epoch  23/50 | train=0.000763 | val_mse=0.006445 | val_mae=0.055274 | lr=5.04e-05
+Epoch  24/50 | train=0.000726 | val_mse=0.006502 | val_mae=0.055506 | lr=4.70e-05
+Epoch  25/50 | train=0.000688 | val_mse=0.006484 | val_mae=0.055467 | lr=4.36e-05
+Epoch  26/50 | train=0.000658 | val_mse=0.006545 | val_mae=0.055647 | lr=4.02e-05
+Epoch  27/50 | train=0.000631 | val_mse=0.006565 | val_mae=0.055895 | lr=3.69e-05
+Epoch  28/50 | train=0.000604 | val_mse=0.006591 | val_mae=0.055845 | lr=3.36e-05
+Epoch  29/50 | train=0.000585 | val_mse=0.006612 | val_mae=0.055969 | lr=3.04e-05
+Epoch  30/50 | train=0.000564 | val_mse=0.006640 | val_mae=0.056069 | lr=2.73e-05
+Epoch  31/50 | train=0.000548 | val_mse=0.006614 | val_mae=0.056044 | lr=2.43e-05
+Epoch  32/50 | train=0.000534 | val_mse=0.006665 | val_mae=0.056178 | lr=2.14e-05
+Early stop: 15 epochs without improvement.
+Training complete. Best mse=0.006229 saved to C:\Users\ylchen\workspace\research_group\artifacts\finetune_checkpoints\run_t1r1_baseline\best

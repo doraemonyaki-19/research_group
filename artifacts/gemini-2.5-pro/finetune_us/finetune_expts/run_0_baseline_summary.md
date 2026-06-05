@@ -1,0 +1,26 @@
+# Run 0: Baseline Replication
+
+- **Hypothesis:** Replicating the "Only working recipe" will reproduce the baseline performance of 8.08% MAPE at 120d.
+- **Hyperparameters:**
+  - `lr`: 1e-4
+  - `optimizer`: adamw
+  - `weight_decay`: 0.01
+  - `freeze_layers`: 17
+  - `epochs`: 50
+  - `batch_size`: 8
+  - `accumulation_steps`: 16
+  - `warmup_epochs`: 5
+  - `early_stopping`: 15
+  - `tickers`: "^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT"
+- **Results:**
+  - `val_loss`: 0.007265
+  - **Eval MAPE:**
+    - `5d`: 3.8%
+    - `14d`: 3.9%
+    - `30d`: 6.0%
+    - `60d`: 6.5%
+    - `120d`: 14.5%
+  - **DirAcc (not captured by evaluate_regional, will add later)**
+- **Comparison to current best (Run 4, 7.40% @ 120d):**
+  - This run is a significant regression (+6.42pp) from the documented best.
+- **Conclusion:** The baseline replication failed. The model underperformed significantly, especially at longer horizons. There must be a mismatch between my execution and the environment that produced the original results. I need to investigate potential causes like data differences or subtle parameter mismatches.

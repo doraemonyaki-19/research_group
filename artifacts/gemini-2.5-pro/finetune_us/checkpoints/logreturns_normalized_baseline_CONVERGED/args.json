@@ -1,0 +1,19 @@
+{
+  "tickers": "AAPL,MSFT,AMZN,GOOGL,NVDA,TSLA,META,JPM,V,JNJ,UNH,HD,PG,MA,BAC,DIS,ADBE,PYPL,NFLX,CRM",
+  "val_tickers": "XOM,CVX,PFE,MRK,KO,PEP,WMT,MCD,CSCO,INTC",
+  "model_id": "google/timesfm-2.5-200m-pytorch",
+  "epochs": 50,
+  "batch_size": 16,
+  "lr": 3e-05,
+  "accumulation_steps": 16,
+  "freeze_layers": 17,
+  "early_stopping": 15,
+  "max_context": 512,
+  "min_context": 128,
+  "horizon": 128,
+  "stride": 32,
+  "save_dir": "C:/Users/ylchen/workspace/research_group/artifacts/gemini-2.5-pro/finetune_us/checkpoints/logreturns_normalized_baseline_CONVERGED",
+  "val_metric": "mse",
+  "seed": null,
+  "normalize_inputs": true
+}

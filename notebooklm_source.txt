@@ -1,0 +1,1648 @@
+# RESEARCH GROUP PROJECT KNOWLEDGE BASE
+
+This document is a compilation of all key architectural, procedural, and contextual documents for the ResearchGroup project. It is intended to be uploaded to NotebookLM as a comprehensive source document.
+
+================================================================================
+--- BEGIN DOCUMENT: README ---
+================================================================================
+
+# ResearchGroup v2: Hierarchical Multi-Agent Scientific Optimization
+
+ResearchGroup v2 is a framework for automated scientific search and system optimization. It extends the paradigm from the original [Glia paper (Hamadanian et al., arXiv:2510.27176)](https://arxiv.org/abs/2510.27176) with a hierarchical multi-agent architecture, three specialized supervisor roles, and per-agent skill injection.
+
+**Status:** Research preview. Empirical results are being validated against the protocol in [`EVALUATION_PROTOCOL.md`](EVALUATION_PROTOCOL.md). See [`PUBLISHING_PLAN.md`](PUBLISHING_PLAN.md) for the publication roadmap.
+
+---
+
+## What's new vs upstream Glia
+
+| Dimension | Upstream Glia (v1) | ResearchGroup v2 |
+|---|---|---|
+| **Application** | GPU-cluster LLM-inference scheduling | Generalized to ML training/hyperparameter optimization (e.g., TimesFM finetuning) |
+| **Agents** | 2 (1 researcher + 1 supervisor) | 4–7 (2–4 parallel researchers + 3 specialized supervisors + 1 evaluator) |
+| **Supervision** | Single generalist | Three specialists writing **independent** memos (prevents anchoring) |
+| **Authority** | None | Evaluator with explicit **`[KILL]` / `[REDIRECT]` / `[TERMINATE]`** directives |
+| **Capabilities** | Plain prompts | Skill injection at run-start (`scientific-critical-thinking`, `scientific-brainstorming`, `peer-review`, `timesfm-forecasting`) |
+| **Coordination** | Shared context | Append-only **findings board** as persistent shared knowledge |
+| **Escalation** | Implicit | Explicit signals (`[BREAKTHROUGH]`, `[STUCK]`, `[NaN]`, `[CEILING]`, `[PIVOT]`, `[APPROVED]`) |
+| **Execution** | Researcher has direct shell access | Researchers plan; orchestrator runs experiments |
+
+---
+
+## Architecture
+
+### Agents
+
+1. **Researchers (parallel, 2–4)** — formulate hypotheses, plan experiments, analyze results. Have Read/Glob/Grep tools; the orchestrator dispatches Bash commands they request.
+
+2. **Supervisors (3 specializations, parallel)**
+   - **Stats** (`scientific-critical-thinking`) — statistical rigor, sample sizes, bias detection, GRADE evidence assessment.
+   - **Domain** (`scientific-brainstorming`) — cross-domain analogies, assumption reversal, scale shifting, constraint exploration.
+   - **Methods** (`timesfm-forecasting` for the TimesFM task; substitutable per task) — model architecture, training dynamics, transfer-learning constraints.
+
+   All three write *independent* memos every turn; no supervisor reads another's output. This is deliberate — supervisor diversity is the value, anchoring is the failure mode.
+
+3. **Evaluator** (`peer-review`) — strategic authority. Reads the full findings board and all supervisor memos. Has `[KILL: <direction>]`, `[REDIRECT: <description>]`, and `[TERMINATE]` authority. Fires every 3 turns or on escalation.
+
+### Cadence
+
+| Agent | Default cadence | Escalation triggers |
+|---|---|---|
+| Researchers | Every turn (parallel) | n/a |
+| Supervisors (×3) | Every turn | `[NaN]`, `[STUCK]`, `[BREAKTHROUGH]`, `[DONE]` from any researcher |
+| Evaluator | Every 3 turns | `[CEILING]`, `[PIVOT]`, `[RESOURCE]` from any supervisor; or all 3 supervisors `[APPROVED]` |
+
+### Data flow
+
+- **Experiment context** (`*_expt.md`) — task description loaded once at run-start, injected into researcher prompts.
+- **Findings board** — append-only structured log of validated insights; trimmed to a bounded char budget; readable by all agents.
+- **Conversation histories** — per-researcher; supervisor memos are *injected* as user-role messages between turns rather than persisted in the LLM context.
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/<your-org>/research_group.git
+cd research_group
+pip install -e .
+pip install -e ".[dev]"   # for tests + linting
+```
+
+Requires Python ≥ 3.10. The Anthropic SDK and Google GenAI SDK are in the runtime deps; `pytest` and `ruff` are dev-only.
+
+### Skills
+
+Skill content is loaded once at run-start. Two layouts are supported:
+
+- **Bundled** — skills live in `research_group/skills/` (default for the Python harness).
+- **Claude Code native** — skills resolve from `~/.claude/skills/` when running via the Claude Code agent path described in `CLAUDE.md`.
+
+If a required skill is missing, the agent runs with no skill content (logged as a warning).
+
+---
+
+## Usage
+
+### A. Python API — for benchmarking and unattended runs
+
+The benchmarking harness in `benchmarks/run_ablation.py` is the primary entry point for evaluation runs:
+
+```bash
+export GEMINI_API_KEY=AIza...
+python benchmarks/run_ablation.py --provider gemini --config V2-Full --seeds 7 --region us
+
+# Or run with Anthropic models:
+export ANTHROPIC_API_KEY=sk-...
+python benchmarks/run_ablation.py --provider anthropic --model claude-3-7-sonnet-20250219 --config V2-Full --seeds 7 --region us
+```
+
+Outputs land in `results/{config}/{region}/seed_{N}_{timestamp}/` containing `research_group_log.md`, `findings_board.md`, and `research_group_summary.md`.
+
+For a single run with custom configuration, instantiate `ResearchGroupV2` directly:
+
+```python
+import os
+from pathlib import Path
+from google import genai
+from research_group.llm import GeminiModel
+from research_group.orchestrator import ResearchGroupV2
+from research_group.researcher import Researcher
+from research_group.supervisor import Supervisor
+from research_group.evaluator import Evaluator
+from research_group.tools import ToolExecutor
+
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+llm_model = GeminiModel(client=client, model="gemini-3.1-pro-preview")
+executor = ToolExecutor(working_dir=Path("path/to/experiment/working/dir"))
+
+researchers = [
+    Researcher(model=llm_model, executor=executor, researcher_id=f"R{i+1}")
+    for i in range(2)
+]
+supervisors = [
+    Supervisor(model=llm_model, role=role)
+    for role in ("Stats", "Domain", "Methods")
+]
+evaluator = Evaluator(model=llm_model)
+
+result = ResearchGroupV2(
+    researchers=researchers,
+    supervisors=supervisors,
+    evaluator=evaluator,
+    user_task="Optimize TimesFM finetuning to minimize MAPE on eval tickers.",
+    output_dir=Path("results/run_001"),
+    max_turns=18,
+    region="us",
+).run()
+
+print(f"Stop: {result.stop_reason}; turns: {result.turns_completed}")
+print(f"Tokens: in={result.total_input_tokens}, out={result.total_output_tokens}")
+```
+
+### B. Claude Code native — for interactive / step-by-step runs
+
+Open a Claude Code session in the project directory and use the loop defined in `CLAUDE.md`:
+
+```bash
+claude
+```
+
+Then prompt: `run research_group --max-turns 27 --researchers 2 --region us`
+
+In native mode, Claude Code's Agent tool dispatches subagent calls; no `ANTHROPIC_API_KEY` is required from your environment. Results are written under `C:\Users\ylchen\workspace\timesfm\finetune_expts\research_group_run_<timestamp>\`.
+
+---
+
+## Tasks supported out of the box
+
+- **TimesFM regional finetuning** — see `research_group_timesfm_expt.md`. Four regions (US, China, Japan, Europe) with rolling-window evaluation.
+
+To define a new task, write a new `<task>_expt.md` describing the optimization target, available data, evaluation metric, and known dead-ends. See [`docs/experiment_context_spec.md`](docs/experiment_context_spec.md).
+
+---
+
+## Repository layout
+
+```
+research_group/
+├── benchmarks/             # Ablation harness (run_ablation.py + results aggregation)
+├── docs/                   # Architecture, experiment-context spec, design notes
+├── research_group/         # The framework package
+│   ├── llm.py              # Generic LLM provider abstraction (Anthropic & Gemini)
+│   ├── researcher.py       # Researcher agent (with token tracking)
+│   ├── supervisor.py       # Supervisor agent (Stats/Domain/Methods)
+│   ├── evaluator.py        # Evaluator agent (with kill/redirect/terminate parsing)
+│   ├── v1_baseline.py      # Re-implementation of upstream 2-agent Glia
+│   ├── b2_baseline.py      # Single-agent "Claude Code freestyle" baseline
+│   ├── prompts.py          # System prompt templates
+│   ├── skill_loader.py     # Skill content loader
+│   ├── skills/             # Bundled fallback skills
+│   └── tools.py            # ToolExecutor + tool definitions
+├── tests/                  # Unit + mocked-integration + smoke tests
+├── EVALUATION_PROTOCOL.md  # Pre-registered evaluation protocol (frozen 2026-05-01)
+├── PUBLISHING_PLAN.md      # 16-week publication plan
+├── CLAUDE.md               # Claude Code native-mode trigger and loop spec
+└── pyproject.toml          # Project metadata, pytest + ruff config
+```
+
+---
+
+## Evaluation status
+
+The pre-registered evaluation against upstream Glia and a Claude-Code-freestyle baseline is in progress. See `EVALUATION_PROTOCOL.md` for the protocol (frozen 2026-05-01) and `benchmarks/REPORT.md` for results once the multi-seed run completes.
+
+Headline hypotheses under test:
+- **H1 — Generalization:** v2 transfers from systems optimization to ML training optimization.
+- **H2 — Hierarchy improves search:** v2's hierarchy beats v1's flat 2-agent setup on at least one of {best result, turns to convergence, $ to threshold}.
+- **H3 — Skill grounding improves agent quality:** skill injection beats no-skills ablation.
+
+A post-T1 kill gate (`EVALUATION_PROTOCOL.md` §7.1) governs whether T2 ablations proceed.
+
+---
+
+## Testing
+
+```bash
+pytest                  # unit + mocked integration; ~2s
+pytest -m smoke         # smoke tests (require ANTHROPIC_API_KEY)
+ruff check .            # lint
+```
+
+CI runs unit tests + lint on every PR (see `.github/workflows/ci.yml`).
+
+---
+
+## Citation
+
+If you use ResearchGroup v2 in your research, please cite both the upstream Glia paper and this repository:
+
+```bibtex
+@article{hamadanian2025glia,
+  title={Glia: A Human-Inspired AI for Automated Systems Design and Optimization},
+  author={Hamadanian, Pouya and Karimi, Pantea and Nasr-Esfahany, Arash and Noorbakhsh, Kimia and Chandler, Joseph and ParandehGheibi, Ali and Alizadeh, Mohammad and Balakrishnan, Hari},
+  journal={arXiv preprint arXiv:2510.27176},
+  year={2025}
+}
+```
+
+A v2 preprint citation will be added upon publication.
+
+---
+
+## License
+
+See [`LICENSE`](LICENSE).
+
+
+================================================================================
+--- BEGIN DOCUMENT: EVALUATION PROTOCOL ---
+================================================================================
+
+# ResearchGroup — Evaluation Protocol (pre-registration)
+
+**Date frozen:** 2026-05-01 (original) | **Revised:** 2026-05-01 per board review
+**Status:** Pre-registered before ablation runs. Board recommendations from `research_group_publishing_plan_review_may2026.md` incorporated. Any change after this date must be tracked in §11.
+
+---
+
+## 0. Why pre-register
+
+The publishing plan (`PUBLISHING_PLAN.md` §6) makes Phase 3 the binding gate for publication. Without pre-registered metrics and protocol, "v2 beats v1" is post-hoc selection from however many things were measured. This document commits the metrics, the configurations, and the pass/fail criteria *before* any ablation is run, so the headline result cannot be the product of researcher degrees of freedom.
+
+The TimesFM portfolio work in this repo paid an explicit overfit tax (15-50% IS→OOS shrinkage was *the* finding of `sector_routing_results.md`). The same discipline applies here: define the rules, then run.
+
+---
+
+## 1. Hypotheses
+
+Three claims from `PUBLISHING_PLAN.md` §2 are tested:
+
+- **H1 — Generalization.** ResearchGroup transfers from systems optimization to ML training/hyperparameter optimization with non-trivial gains over a no-agent baseline. *(Sanity check — necessary but not sufficient for publication.)*
+- **H2 — Hierarchy improves search.** *(Co-headline.)* v2's hierarchical configuration (multiple researchers + 3 specialized supervisors + evaluator with kill authority) outperforms v1's flat 2-agent configuration on at least one of {best result reached, turns to convergence, $ to threshold}.
+- **H3 — Skill grounding improves agent quality.** *(Co-headline.)* v2 with skill injection beats v2 without skill injection on best-result-reached. This is the most generalizable contribution — skill injection can be adopted by any agent framework.
+
+H1 is a sanity check. **H2 and H3 are co-headlines.** Either alone is sufficient for the framework story; both together make the strongest paper. H3 is highlighted as the most transferable contribution (per board review: Feynman).
+
+---
+
+## 2. Tasks
+
+| ID | Task | Why | Status |
+|---|---|---|---|
+| **T1** | TimesFM finetuning, US region (NVDA, UNH, GS, CVX, KO, BA held-out; six S&P training tickers) | Existing application; results already partially known | Primary task; run first |
+| **T2** | Small ML benchmark — hyperparameter search on a CIFAR-10 ResNet-18 (or MNIST CNN if CIFAR proves too slow per ablation cell) | Reproducible, cheap, lets us afford more seeds | Primary task; run after T1 pilot |
+| ~~**T3**~~ | ~~Re-implementation of upstream's GPU-scheduling task~~ | ~~Direct head-to-head with v1 on its home turf~~ | **CUT per board review (Jobs).** If T1+T2 both pass, T3 adds marginal value. If either fails, T3 won't save the paper. |
+
+**T1 is the headline.** T2 is the variance check: if T1 passes but T2 fails, the headline is "v2 helps for forecasting tasks specifically" — and the fallback paper outline (see `PUBLISHING_PLAN.md` §9a) should be used. If both pass, the headline is "v2 helps generally."
+
+---
+
+## 3. Configurations under test
+
+For each task, the following configurations are run. Configurations are immutable once this document is frozen.
+
+| ID | Config | What it tests |
+|---|---|---|
+| **B0** | Random / grid search over hyperparameters with the same compute budget as the agent runs | Trivial baseline — answers "is the problem non-trivial?" |
+| **B1** | Single-agent loop: one LLM in a loop, no supervisor, no evaluator | Controls for "is it just LLM-in-loop?" |
+| **B2** | **Claude Code in agentic mode** — given the same task description and compute budget, no framework, freestyle | Controls for "why not just use the chat tool?" The reviewer's first question. *(Added per board review: Burry)* |
+| **V1** | ResearchGroup v1 — 1 researcher + 1 supervisor (re-implemented in this repo, see §3.1) | The load-bearing baseline for H2 |
+| **V2-noSkills** | v2 full, but agents prompted without skill injection | Tests H3 (co-headline) |
+| **V2-full** | v2 as currently configured (2 researchers, 3 specialized supervisors, evaluator with kill authority, skill injection) | The proposed configuration |
+
+**Configs removed per board review (Jobs):** V2-min, V2-noEval, V2-1res. Rationale: V2-min is a code-base control that adds complexity without testing a headline hypothesis. V2-noEval and V2-1res test secondary architectural choices (kill authority, parallelism) that are not load-bearing for H2 or H3. These can be added in a revision if reviewers request them.
+
+### 3.1 ResearchGroup v1 re-implementation
+
+The v1 baseline must be re-implemented in this repo to share the harness. The re-implementation is constrained to:
+- Two agents (researcher + generalist supervisor)
+- No specialized supervisors, no evaluator, no kill authority
+- No skill injection
+- Same model and same per-turn budget as V2 configurations
+- Researcher has shell access (matches upstream paper); orchestrator does not run experiments
+- MCG (multi-context ResearchGroup) variant deferred — V1-SCG (single-context) is the comparison
+
+Code lives in `research_group/v1_baseline.py`; tests pin its agent count and absence of evaluator state.
+
+---
+
+## 4. Metrics
+
+### 4.1 Primary metrics (pre-registered, the only ones that determine pass/fail)
+
+| Metric | Aggregation | Direction |
+|---|---|---|
+| **best_result** — best task-specific score reached during the run (T1: lowest 120d MAPE on held-out; T2: highest val accuracy; T3: lowest mean latency) | per seed, then mean ± SE across seeds | Lower for T1; higher for T2; lower for T3 |
+| **turns_to_threshold** — turns required to reach 80% of V2-full's median best_result for that task | per seed, then mean ± SE | Lower is better |
+| **dollars_to_threshold** — total LLM API spend to reach the same 80% threshold | per seed, then mean ± SE | Lower is better |
+
+### 4.2 Secondary metrics (reported, not used for decision)
+
+- **Insight rate** — number of distinct hypotheses tested per turn
+- **Kill correctness** — for V2-full only: of N evaluator-killed directions, what fraction would a held-out human reviewer also kill (50-direction sample, blind review)
+- **Variance** across seeds for best_result (lower is better; signals robustness)
+- **Compute footprint** — GPU-hours for the underlying experiment runs
+
+### 4.3 Exploratory metrics (descriptive, no claims attached)
+
+- Findings-board entropy, supervisor-memo length distribution, escalation-signal frequency. Anything else that emerges. Reported in an appendix; cannot drive headline claims.
+
+---
+
+## 5. Seeds & sample sizes
+
+- **Number of seeds per (task × config) cell:** **7 seeds** for T1: `{42, 137, 271, 314, 1729, 2718, 3141}`. **5 seeds** for T2: `{42, 137, 271, 314, 1729}`. *(T1 increased from 5→7 per board review (Simons): buys statistical power from ~0.6 to ~0.75 for paired Wilcoxon at medium effect size. Marginal cost: ~$80-240 LLM + 16-64 GPU-hours.)*
+- **What "seed" controls:**
+  - LLM sampling temperature seeded via `system_fingerprint` request when supported; otherwise re-runs are independent samples
+  - Random initialization of the underlying ML task (where applicable)
+  - Order of researcher assignment / hypothesis exploration randomization
+  - **Pin Anthropic SDK version, model version, and request-level seed in every run's JSON log.** Cross-version comparisons are not valid. *(Added per board review: Simons.)*
+- **Same task budget across configs.** Total turns capped at `max_turns = 18` for v2 configs and `max_turns_v1 = 54` for V1. *(Revised 2026-05-08: V2 reduced from 27 → 18 turns to compensate for the denser supervisor / evaluator cadence — see §11 change log.)* V1 retains 54 turns since its cadence (researcher + supervisor every turn) is unchanged. The per-cell agent-call counts now match: V1 = 54 × 2 = 108 calls; V2 = 18 × ~5.3 ≈ 96 calls. B0 (grid) gets compute-equivalent number of trials. B1 and B2 get `max_turns = 27` (their per-turn cost is unchanged).
+- **Pilot first.** Before the full multi-seed run on T1, run a single-seed pilot (seed 42) across **B0, B2, V1, V2-full** only. This is to estimate cost per cell and time per cell. Pilot results do **not** count toward the headline decision; they only inform whether to commit to the full ablation.
+
+---
+
+## 6. Statistical analysis plan
+
+### 6.1 Primary test for H1 (generalization)
+
+V2-full vs B0 (random/grid search) on **best_result**, paired across seeds.
+- **Test:** paired Wilcoxon signed-rank (non-parametric; n=7 for T1, n=5 for T2).
+- **Pass criterion:** p < 0.05 AND v2-full's mean improvement over B0 ≥ task-specific minimum effect size (T1: 0.5pp MAPE at 120d; T2: 1pp validation accuracy).
+
+### 6.2 Primary test for H2 (hierarchy)
+
+V2-full vs V1 on each of {best_result, turns_to_threshold, dollars_to_threshold}, paired across seeds.
+- **Test:** paired Wilcoxon signed-rank for each of the three metrics.
+- **Pass criterion (per the publishing plan §6 decision rule):** v2 beats v1 by ≥1 SE on **≥2 of 3 metrics** AND across **≥2 of 2 tasks** (T1 and T2).
+- **Multiple-comparisons correction:** since 3 metrics × 2 tasks = 6 tests, apply Benjamini-Hochberg FDR control at q=0.10. Headline "win" requires the BH-corrected criterion to hold.
+
+### 6.3 Primary test for H3 (skills)
+
+V2-full vs V2-noSkills on best_result, paired across seeds.
+- **Test:** paired Wilcoxon signed-rank.
+- **Pass criterion:** p < 0.05 AND v2-full mean > v2-noSkills mean by at least 0.5 SE.
+
+### 6.4 Robustness checks
+
+- **Leave-one-seed-out:** drop each seed in turn; do the qualitative conclusions hold? Reported in appendix.
+- **Best-of-N reframing:** for V2-MCG variants in future work, Best-of-N is the right comparison. *Not in scope* for this protocol.
+
+### 6.5 What we will NOT do
+
+- No metric-shopping: only the metrics defined in §4.1 determine pass/fail.
+- No post-hoc seed exclusion. If a seed produces an outlier, it stays in the analysis and is reported; an appendix can break it out, but it does not move the headline.
+- No mid-run early stopping based on intermediate results to "save compute." Either commit the budget or don't run the cell.
+
+---
+
+## 7. Pilot decision gate
+
+After the §5 pilot (single seed on T1 with B0, B2, V1, V2-full):
+
+| Pilot result | Action |
+|---|---|
+| V2-full and V1 cost <2× more than budgeted per cell | Proceed to full multi-seed T1. |
+| Costs exceed estimate | Reduce T1 seeds from 7 to 5; keep all 6 configs. |
+| V2-full crashes / produces unusable output on >25% of pilot turns | Pause and debug; do not run multi-seed until fixed. |
+| V2-full underperforms V1 in pilot | Continue full ablation regardless — the pilot is *not* a decision gate on the science, only on the compute. Negative result is still publishable. |
+
+### 7.1 Kill gate (added per board review: Buffett)
+
+**After the full T1 multi-seed ablation (all 6 configs × 7 seeds = 42 runs):**
+
+If V2-full does **not** beat V1 by ≥0.25 SE on **any** of the three primary metrics (best_result, turns_to_threshold, dollars_to_threshold):
+
+→ **ABORT full T2 ablation.** Redirect remaining effort to:
+1. Documentation + GitHub release (Phase 1 + Phase 2 deliverables)
+2. Publish framework as a negative-result technical report + open-source release
+3. Do NOT spend the remaining ~$120-400 and 40 GPU-hours on T2
+
+If V2-full beats V1 by ≥0.25 SE on **at least one** metric → proceed to T2.
+
+**Rationale:** The pilot gate (§7 above) tests compute feasibility. This kill gate tests scientific signal. If T1 shows no signal after 42 runs with 7 seeds, additional tasks will not rescue the hypothesis. The honest move is to publish as documentation + framework contribution, not to search for a task where v2 happens to win.
+
+---
+
+## 8. Stopping rules (run-level)
+
+A single run is stopped before reaching `max_turns` only if:
+- Evaluator issues `[TERMINATE]` (defined behavior, expected)
+- All three supervisors emit `[APPROVED]` simultaneously (defined behavior)
+- An exception interrupts the run (unhealthy; flagged for review)
+
+There are **no other early-stopping conditions**. In particular, there is no "stop because we're not making progress" heuristic — that's the evaluator's job. If the evaluator does not call it, the run continues.
+
+---
+
+## 9. Cost & time budgets
+
+| Task | Cells | Seeds/cell | Est. LLM $ per cell-seed | Est. compute / cell-seed | Total LLM $ | Total compute |
+|---|---|---|---|---|---|---|
+| T1 | 6 configs | 7 | $5-15 | 2-8 GPU-hours | $210-630 | 84-336 GPU-hours |
+| T2 | 6 configs | 5 | $3-10 | <1 GPU-hour | $90-300 | <30 GPU-hours |
+| **Total (T1+T2)** | | | | | **$300-930** | **84-366 GPU-hours** |
+
+Cost ceiling: if Phase 3 LLM spend exceeds **$1,200**, pause and re-evaluate. Compute ceiling: if GPU-hours exceed **400**, same.
+
+*Budget revised per board review: fewer configs (8→6) but more seeds on T1 (5→7). T3 removed. Net effect: comparable total cost, better statistical power on headline task.*
+
+---
+
+## 10. Deliverables
+
+- `benchmarks/run_ablation.py` — single-command harness; takes a task ID + config matrix; produces a results CSV
+- `benchmarks/results/{task}/{config}/seed{N}.json` — raw per-run logs (full turn history, costs, timings)
+- `benchmarks/results_aggregate.csv` — cell × metric table
+- `benchmarks/figures/` — fig 1 (best_result distribution per config), fig 2 (turns_to_threshold), fig 3 (dollars_to_threshold)
+- `benchmarks/REPORT.md` — narrative results, decision-gate verdicts, what changed (§11)
+
+---
+
+## 11. Change log (must be updated for any post-registration change)
+
+A change after this protocol is frozen is acceptable only if it (a) makes the comparison more rigorous (e.g., adding a test) or (b) corrects a clear bug. Removing a test or changing a pass criterion in a way that favors V2-full **without** loosening it for v1 is forbidden.
+
+| Date | Change | Why | Affects headline? |
+|---|---|---|---|
+| 2026-05-01 | Configs reduced 8→6: dropped V2-min, V2-noEval, V2-1res; added B2 (Claude Code freestyle) | Board review (Jobs: focus; Burry: missing baseline) | No — makes comparison more rigorous by adding a practical baseline |
+| 2026-05-01 | T1 seeds increased 5→7 | Board review (Simons: statistical power 0.6→0.75) | No — increases rigor |
+| 2026-05-01 | T3 cut permanently | Board review (Jobs: marginal value if T1+T2 pass) | No — reduces scope, does not weaken remaining tests |
+| 2026-05-01 | Kill gate added after T1 full ablation (§7.1) | Board review (Buffett: explicit abort criterion) | No — adds rigor |
+| 2026-05-01 | H3 promoted to co-headline with H2 | Board review (Feynman: most generalizable contribution) | Yes — reframes the paper's contribution hierarchy |
+| 2026-05-08 | V2 cadence: supervisors every turn (was every 3); evaluator every 3 turns (was every 9). V2 max_turns: 27 → 18 to keep per-cell agent-call count comparable to V1 (~108 calls/cell). | Pilot showed V2 underused supervisor/evaluator critique at the 1-in-3 / 1-in-9 cadence — most stalls and direction errors went uncaught until late. Denser cadence increases per-turn rigor; fewer turns keeps cost flat. | No — total per-cell agent-call budget unchanged; H2/H3 comparisons stay symmetric across configs because V1's cadence and budget are unchanged. |
+
+---
+
+## 12. Reviewer questions this protocol pre-empts
+
+- *"How did you pick these specific metrics?"* → §4 was frozen 2026-05-01.
+- *"Why this many seeds?"* → §5; T1 uses n=7 (power ~0.75 for medium effect at paired Wilcoxon); T2 uses n=5. We report SE and CI, not just p-value.
+- *"Why these specific ablations?"* → §3; each strips one architectural feature from V2-full to isolate its contribution. Board review trimmed to the minimal matrix testing all three hypotheses.
+- *"What if v2 doesn't win?"* → §6 and §7.1; the decision rule, the publishing-plan §6 gate, and the post-T1 kill gate explicitly cover negative-result handling.
+- *"Did you cherry-pick the task?"* → T1 is the existing application (so yes, results were partially known); T2 is a clean held-out task that was selected before any v2-vs-v1 result existed.
+- *"Why not compare against Claude Code / other agent tools?"* → B2 (Claude Code freestyle) is in the matrix. Broader framework comparisons (FutureHouse, Anthropic AAR) are deferred to follow-up; see §13.
+
+---
+
+## 13. Anti-checklist (things this protocol does NOT pretend to do)
+
+- It does not establish that v2 is "better" in any absolute sense — only that it is better than the specific configurations tested under the specific metrics defined.
+- It does not address whether v2 is more interpretable, easier to deploy, or cheaper to operate at scale. Those are claims for separate evaluation.
+- It does not test against newer agent frameworks (e.g., FutureHouse aviary, Anthropic AAR) that have appeared since the v2 design was frozen. Those comparisons belong in a follow-up.
+- It does not establish causal mechanism: even if V2-full beats V1, this protocol cannot distinguish "the hierarchy helps" from "the hierarchy plus the prompts plus the orchestrator-runs-experiments pattern jointly help." Mechanism teasing-apart is what the ablations *attempt* but only partially achieve.
+
+
+================================================================================
+--- BEGIN DOCUMENT: PUBLISHING PLAN ---
+================================================================================
+
+# ResearchGroup — Document, Evaluate, Test, Publish: Project Plan
+
+**Date:** 2026-04-29
+**Owner:** ylchen
+**Status:** Draft, awaiting decision on Strategic Question 1 below
+
+---
+
+## 0. Executive Summary
+
+The ResearchGroup codebase in this directory is a **substantially modified extension** of the upstream ResearchGroup framework (arXiv:2510.27176, Hamadanian et al., MIT CSAIL, Oct 2025). The framing-honest term is "ResearchGroup." The plan below takes it from working-research-code to published-and-cited contribution in roughly **3-4 months of focused effort**, gated by one strategic decision and three empirical milestones.
+
+**The four phases are not sequential.** Documentation and testing run in parallel with evaluation. Evaluation is the binding gate for publication. **The plan stands or falls on Phase 3 (evaluation) producing defensible head-to-head results.**
+
+---
+
+## 1. Asset Inventory
+
+### Code (`research_group/`)
+- `research_group/orchestrator.py` (448 LOC) — main loop, state machine, escalation handling
+- `research_group/prompts.py` (469 LOC) — researcher / supervisor / evaluator prompt templates
+- `research_group/tools.py` (225 LOC) — tool execution layer
+- `research_group/researcher.py` (154 LOC) — researcher agent
+- `research_group/evaluator.py` (127 LOC) — evaluator agent (kill / redirect / terminate authority)
+- `research_group/supervisor.py` (107 LOC) — supervisor agent (3 specializations)
+- `research_group/__init__.py` (16 LOC) — public API
+- `run_research_group.py` (110 LOC) — CLI entry, both run modes
+- **Total: ~1,656 LOC of framework code** + experiment-context markdown
+
+### Documentation (current state)
+- `README.md` — describes **upstream** ResearchGroup (paper summary). Does **not** describe v2 modifications.
+- `CLAUDE.md` — describes v2 loop structure and prompts; written for Claude Code execution path. Excellent for that path; not a publication-grade architecture doc.
+- `research_group_timesfm_expt.md` — experiment context for TimesFM finetuning (region configs, eval tickers, current bests, dead ends).
+- `ResearchGroup.pdf` — upstream paper (reference).
+- `requirements.txt` — minimal: `anthropic`, `python-dotenv`, `rich`.
+
+### Empirical results (already in hand)
+- **30+ ResearchGroup runs** completed across 4 regions (US, China, Japan, Europe), output dirs in `timesfm/finetune_*/research_group_run_*`.
+- **Documented improvements (region-best vs baseline):**
+  - US: +0.68pp at 120d
+  - China: +6.62pp (17.48% → 10.86% MAPE) — strongest result
+  - Japan: +2.20pp at 120d (borderline; std 2.88%)
+  - Europe: results in `finetune_europe/finetune_expts/research_group_run_20260326/`
+- **Findings boards, evaluator memos, supervisor memos** preserved in run dirs — substantial qualitative evidence of agent reasoning patterns.
+
+### What's NOT in the codebase
+- Unit or integration tests
+- CI configuration
+- API reference / type-stub docs
+- Architecture diagram
+- Comparison/benchmark suite vs upstream ResearchGroup or other frameworks
+- License file
+- Contribution guide
+
+---
+
+## 2. The Contribution Claim (what makes v2 different from v1)
+
+This is the core argument the publication will rest on. It must be defensible.
+
+| Dimension | ResearchGroup v1 (upstream) | ResearchGroup (this codebase) |
+|---|---|---|
+| **Application domain** | GPU-cluster LLM-inference scheduling | Generalized to scientific optimization (TimesFM finetuning) |
+| **Agent count** | 2 (Researcher + Supervisor) | 4-7 (2-4 Researchers + 3 specialized Supervisors + 1 Evaluator) |
+| **Supervision** | Single, generalist supervisor | Three specialized supervisors (Stats / Domain / Methods) writing **independent** memos to prevent anchoring |
+| **Authority** | No kill mechanism | Evaluator with explicit **kill / redirect / terminate** authority |
+| **Capability injection** | None | Agent Skill integration: each agent loaded with domain-specific skill (scientific-critical-thinking, scientific-brainstorming, peer-review, timesfm-forecasting) |
+| **Coordination state** | Single shared context | **Findings board** as append-only shared knowledge state |
+| **Escalation** | Implicit | Explicit signals: `[BREAKTHROUGH]`, `[STUCK]`, `[NaN]`, `[CEILING]`, `[PIVOT]`, `[KILL]`, `[TERMINATE]` |
+| **Execution model** | Researcher has direct shell access | Orchestrator runs experiments; researchers plan |
+| **Multi-context (MCG)** | Best-of-N parallel runs | Same MCG pattern + within-run parallel researchers |
+
+**The claim space:**
+1. **Generalization:** v2 demonstrates the ResearchGroup paradigm transfers from systems optimization to ML hyperparameter / training optimization with non-trivial gains.
+2. **Hierarchy improves search:** specialized supervisors + an evaluator with kill authority outperforms flat 2-agent ResearchGroup on search efficiency.
+3. **Skill grounding improves agent quality:** loading domain-specific skills into agents at run-start improves output quality vs generic prompting.
+
+**These are the three claims the publication should be tested against. Each requires direct empirical comparison against an ablation-scale baseline.**
+
+---
+
+## 3. STRATEGIC DECISION 1 (BLOCKING) — Upstream Relationship
+
+**This decision must be made before public release of any code, paper, or blog post.** It changes the publication path materially.
+
+### The situation
+
+The upstream ResearchGroup paper authors (Hamadanian, Karimi, Nasr-Esfahany, Noorbakhsh, Chandler, ParandehGheibi, Alizadeh, Balakrishnan) are at MIT CSAIL. ylchen is also at/near MIT CSAIL. **Publishing "ResearchGroup" without engagement with the upstream authors carries reputational risk and forfeits potential collaboration.** Conversely, full-disclosure collaboration carries different tradeoffs.
+
+### Three options
+
+| Option | Description | Pros | Cons |
+|---|---|---|---|
+| **A. Independent v2** | Publish as a clean fork/extension; cite upstream prominently; do not coordinate | Full credit; fastest timeline | Reputational risk if interpreted as overstepping; weaker MIT alignment |
+| **B. Collaborate first** | One email / coffee with one upstream author (likely Hamadanian or Alizadeh); propose merge or joint paper | Strongest political position; potentially stronger paper; MIT-internal goodwill | Slower; possible scope-creep; possible rejection of merge |
+| **C. Application paper** | Frame as "Hierarchical Multi-Agent ResearchGroup for Scientific ML Optimization" — application-domain paper, not framework upgrade | Lowest conflict; clear narrative; faster than B | Underplays framework contributions; may not pass framework reviewers |
+
+### Recommendation: **Option B via warm introduction (revised per board review: Oppenheimer).**
+
+**Do not cold-email.** The upstream senior authors (Hari Balakrishnan, NAE member, CMT co-founder; Mohammad Alizadeh) are not people you send a cold proposal to. The approach:
+
+1. **Find a warm introduction** — a mutual colleague, a shared seminar, a CSAIL-internal channel. Budget: 1-2 weeks.
+2. **Propose a 30-minute demo, not a paper.** Show them the findings board, the evaluator memos, the supervisor disagreements, and the TimesFM results. Let the work speak before discussing authorship.
+3. **Prepare for the most likely outcomes:**
+   - *They want to absorb the work* → you become a co-author on ResearchGroup under their umbrella. Good for career (MIT authorship, Balakrishnan's network); you lose sole credit. **Decide now whether you accept this tradeoff.**
+   - *Polite indifference* → "go ahead, cite us." You publish Option A, cite heavily.
+   - *Hostile* (5-15% probability) → frame as application paper (Option C) with heavy citation.
+4. **Decision rule:** If no intro path found in 2 weeks → send a direct but respectful email. If no response to email in 4 weeks (not 2 — faculty timelines are slow) → Option A by default.
+
+**Budget 20-40 hours for this relationship, not 0.5 hours.** This is risk management, not a courtesy.
+
+---
+
+## 4. Phase 1 — Documentation (Weeks 1-6, parallel with all other phases)
+
+### Goal
+Produce documentation that lets a (a) reviewer evaluate the work, (b) external user run it on their own task, (c) future contributor extend it.
+
+### Deliverables (trimmed per board review: Jobs)
+
+| # | Deliverable | Effort | Owner | Done when |
+|---|---|---|---|---|
+| 1.1 | **Updated README.md** — replace v1 summary with v2 architecture, examples, run instructions, citation block | 4-8h | ylchen | A new user can clone, install, run on the included TimesFM task in <30 min |
+| 1.2 | **Architecture diagram** — agent topology, data flow, escalation paths | 4h | ylchen | Diagram exists as `docs/architecture.png` and `docs/architecture.md`; explained in README |
+| ~~1.3~~ | ~~**API reference**~~ | ~~8-12h~~ | — | **CUT.** 8-12h for 1,656 LOC is poor ROI. No reviewer will check auto-generated docs. |
+| 1.4 | **Experiment-context format spec** — generalize beyond TimesFM; document how to write a new `*_expt.md` for a new domain | 4h | ylchen | A reader can write a context file for a new task without reading source |
+| ~~1.5~~ | ~~**Migration guide: v1 → v2**~~ | ~~4h~~ | — | **CUT.** No meaningful upstream ResearchGroup user base yet. |
+| ~~1.6~~ | ~~**Run-mode comparison**~~ | ~~2h~~ | — | **CUT.** Internal documentation, not a deliverable. |
+| 1.7 | **LICENSE** (Apache 2.0 — default; has patent protection MIT lacks) + **CONTRIBUTING.md** | 2h | ylchen | Files exist |
+| 1.8 | **Bundle skill content as markdown in repo** — resolve the `~/.claude/skills/` dependency by including skill files as `research_group/skills/*.md` with a loader fallback | 2-4h | ylchen | External users can run v2 without Claude Code or Agent Skill API setup |
+
+### Total Phase 1 effort: ~16-22 hours (was ~30-40h)
+
+---
+
+## 5. Phase 2 — Testing (Weeks 1-4, parallel)
+
+### Goal
+Provide a test suite sufficient to (a) prevent regressions during development, (b) signal code quality to reviewers, (c) enable safe refactoring.
+
+### Deliverables
+
+| # | Deliverable | Effort | Done when |
+|---|---|---|---|
+| 2.1 | **Unit tests** — orchestrator state machine, escalation signal parsing, findings-board append/trim, prompt templating | 12-16h | `pytest` runs in <30s; ≥70% line coverage on `research_group/*.py` (excluding LLM-call paths) |
+| 2.2 | **Mock-LLM integration test** — full ResearchGroup run on a tiny problem (mocked Anthropic responses); verify state transitions, log artifacts, summary file written | 8h | `pytest tests/test_full_run_mocked.py` passes; produces all expected artifacts |
+| 2.3 | **Smoke test (real LLM)** — single-turn run with real API, gated by `GEMINI_API_KEY` or `ANTHROPIC_API_KEY`; verify the network path works | 4h | `pytest -m smoke` passes when key is set |
+| 2.4 | **CI configuration** — GitHub Actions: lint (ruff), unit tests, mock integration test on every PR; smoke test nightly | 4h | Green CI on main; PR template includes test requirement |
+| 2.5 | **Pre-commit hooks** — ruff + pytest-fast on changed files | 1h | `pre-commit install` works |
+
+### Total Phase 2 effort: ~30-35 hours
+
+**Note on what's NOT in scope:** end-to-end real-LLM tests on full optimization problems. Those are evaluation runs (Phase 3), not tests.
+
+---
+
+## 6. Phase 3 — Evaluation (Weeks 3-12, the binding gate)
+
+### Goal
+Produce defensible head-to-head evidence that v2 outperforms v1 (and reasonable baselines) on at least one task. **Without this, the publication does not exist.**
+
+### 3a. Benchmark task selection
+
+**Recommended: 2-task suite (revised per board review: Jobs — T3 cut permanently).**
+
+| Task | Why | Source | Cost per run |
+|---|---|---|---|
+| **TimesFM finetuning (the existing application)** | Already have results; simplest re-run | This codebase | ~2-8 GPU-hours |
+| **Hyperparameter search on a small ML benchmark** (e.g., CIFAR-10 ResNet-18, or MNIST CNN) | Clean, reproducible, fast — lets you run more seeds | Standard datasets | <30 min |
+
+~~**Re-implement upstream's GPU-scheduling task**~~ — **CUT per board review (Jobs).** If T1+T2 both pass, T3 adds marginal value. If either fails, T3 won't save the paper. Can be added in a revision if reviewers request it.
+
+### 3b. Baselines to compare against (trimmed per board review: Jobs, Burry)
+
+For each task, run 6 configs (was 8):
+
+1. **B0 — Random search / grid search** — trivially weak baseline that demonstrates the problem is non-trivial.
+2. **B1 — Single-agent loop** (one researcher, no supervisor, no evaluator) — controls for "is it just LLM agents in a loop?"
+3. **B2 — Claude Code in agentic mode** (freestyle, same task description, same compute budget) — controls for "why not just use the chat tool?" *(Added per board review: Burry.)*
+4. **V1 — ResearchGroup v1** (as published — 1 researcher + 1 supervisor) — **the most important baseline**; tests whether hierarchy helps.
+5. **V2-noSkills — ResearchGroup minus skill injection** — tests H3 (co-headline).
+6. **V2-full — ResearchGroup (full)** — the proposed configuration.
+
+**Removed:** v2 minus evaluator, v2 with single supervisor, v2 with 1 researcher. These test secondary architectural choices and can be added in a revision.
+
+### 3c. Metrics
+
+| Metric | What it measures |
+|---|---|
+| **Best result** | The metric the task optimizes (MAPE for TimesFM; validation accuracy for ML benchmark; latency for systems) |
+| **Turns to convergence** | When does improvement plateau (<0.1pp per 3 turns) |
+| **Total LLM cost ($)** | Direct dollar cost to reach a given threshold |
+| **Insights / kill-correctness** | (Qualitative) does the evaluator's kill decisions align with hindsight? |
+| **Variance across seeds** | Run each config 3-5 times with different seeds; report mean ± SE |
+
+### 3d. Multi-seed protocol
+
+**This is non-negotiable for publication.** Single-seed results are not credible.
+- **T1: 7 seeds** (revised from 5 per board review: Simons — power 0.6→0.75)
+- **T2: 5 seeds**
+- Same task budget across configs (max-turns or max-$)
+- Pre-register which task / region / horizon is the headline result before running ablations (avoid p-hacking against own data)
+
+### 3e. Deliverables
+
+| # | Deliverable | Effort | Done when |
+|---|---|---|---|
+| 3.1 | **Benchmark harness** — single script that runs 6 configs on a task, logs everything, computes metrics | 16-24h | One command produces a results CSV + plots |
+| 3.2 | **Reproducible TimesFM benchmark** — re-run US region results with seed control (7 seeds × 6 configs = 42 runs) | 20-40 GPU-hours | Multi-seed results tabulated |
+| 3.3 | **Small ML benchmark** (Task 2) — full ablation table (5 seeds × 6 configs = 30 runs) | 10-20h compute + 8h analysis | Multi-seed results + plots |
+| 3.4 | **ResearchGroup v1 + B2 implementation** — re-implement v1 2-agent protocol + Claude Code freestyle harness | 16-24h | Both run end-to-end on T1 and T2 |
+| 3.6 | **Results write-up** — tables, plots, statistical tests (paired t-test or Mann-Whitney) | 12-16h | Draft paper figures + captions ready |
+
+### Total Phase 3 effort: ~50-90 hours of human time + 84-366 GPU-hours (revised)
+
+### Decision gates
+
+**Kill gate (after T1, per board review: Buffett):** If V2-full does not beat V1 by ≥0.25 SE on any of the three primary metrics → ABORT T2 and redirect to documentation + GitHub release. See `EVALUATION_PROTOCOL.md` §7.1.
+
+**Decision gate (after T1+T2):**
+- Does v2 beat v1 by ≥1 standard error on ≥2 metrics across ≥2 tasks? → proceed to Phase 4 (full paper).
+- Does v2 beat v1 on T1 but not T2? → use the forecasting-specific fallback paper outline (§9a below).
+- Does v2 tie v1? → restructure publication as "we show v2 doesn't hurt; offers other benefits (interpretability, kill authority)." Lower-tier venue.
+- Does v2 *underperform* v1? → publish as honest negative result + framework documentation; significantly de-prioritize publication.
+
+---
+
+## 7. Phase 4 — Publishing (Weeks 8-16, conditional on Phase 3)
+
+### Venue ladder (parallel paths, choose based on Phase 3 results)
+
+| Venue | Standard | Lead time | Effort | When |
+|---|---|---|---|---|
+| **arXiv preprint** | None (just review) | 0 (instant) | 1 week of prep | Always — first move |
+| **GitHub release + technical blog post** | Engineering audience; informal | 0 | 1-2 weeks | After arXiv; uses same writing |
+| **Workshop paper** (NeurIPS / ICML / ICLR workshops on agents, ML4Sys, AutoML) | Light review; smaller audience | 1-3 months | 2-3 weeks of writing | After preprint, if results are solid |
+| **Main-track conference** (NeurIPS / ICML / ICLR) | Strong empirical bar | 6-9 months | 4-8 weeks of writing | Only if results are strong AND comparison vs upstream ResearchGroup is direct |
+| **Journal** (JMLR, Nature MI) | Strongest review; longest cycle | 9-18 months | 8-12 weeks | Long-term option |
+
+### Recommended path (revised per board review: arXiv at Week 6)
+
+1. **Weeks 1-2:** warm introduction to upstream authors (Strategic Decision 1).
+2. **Week 6:** arXiv preprint v0.1 — minimum viable description of v2 + Phase 3 T1 results. **Ship rough. Polish later. The timestamp is the moat.** *(Moved from Week 8-10 per board review: Munger, Jobs.)*
+3. **Week 7-8:** GitHub release v0.1 with reproduction artifacts. **Release simultaneously with or before preprint, not after.** *(Per board review: Brin — researchers discover tools on GitHub, not arXiv.)*
+4. **Week 8-10:** workshop submission — workshop deadlines 2026 NeurIPS workshops are typically July-Sept. Aim for one of: ML4Sys, NeurIPS Agents, AutoML.
+5. **Week 10+:** main-track or journal — only if Phase 3 results are unambiguous wins.
+
+### If upstream is non-responsive (Option A fallback)
+
+Same as above, but every artifact must include a prominent comparison with v1 in the abstract / first figure. Reviewers will compare anyway; better to control the framing.
+
+### Publication artifacts checklist
+
+Before any submission:
+- [ ] arXiv-style PDF with figures
+- [ ] Frozen GitHub release tagged with paper version
+- [ ] Reproduction script that regenerates every figure from raw data
+- [ ] Anonymized review version (for double-blind venues)
+- [ ] Author response template
+- [ ] Pre-registered metrics for the headline claim
+- [ ] CITATION.cff in repo
+
+---
+
+## 8. Timeline & Critical Path (revised per board review: 10 weeks, not 16)
+
+```
+Week  1  2  3  4  5  6  7  8  9  10
+──────────────────────────────────────
+UP    ▓▓▓▓     ← upstream warm intro + demo
+P1    ▓▓▓▓▓▓                          Documentation (trimmed)
+P2    ▓▓▓▓                            Testing
+PILOT ▓▓                              T1 single-seed pilot (B0, B2, V1, V2-full)
+GATE     ▓  ← PILOT GATE (cost check)
+P3a      ▓▓▓▓▓▓▓                      T1 full ablation (6 configs × 7 seeds)
+KILL        ▓  ← KILL GATE (abort or proceed to T2)
+P3b         ▓▓▓▓▓▓                    T2 ablation (6 configs × 5 seeds)
+P4a           ▓▓▓                     arXiv preprint (Week 6!)
+P4b              ▓▓                   GitHub release + repo cleanup
+P4c              ▓▓▓▓▓               Workshop paper (NeurIPS deadline)
+```
+
+### Critical path
+**Upstream intro (Weeks 1-2) → T1 pilot (Weeks 1-2) → T1 full ablation (Weeks 3-5) → KILL GATE → T2 (Weeks 5-7) → arXiv preprint (Week 6!)** — everything else can flex.
+
+### Effort budget (revised)
+- **Total ylchen effort:** ~116-187 hours (~20-25% reduction from original).
+  - Phase 1 (Documentation): 16-22h (was 30-40h)
+  - Phase 2 (Testing): 30-35h (unchanged)
+  - Phase 3 (Evaluation): 50-90h (was 80-160h)
+  - Upstream relationship: 20-40h (was 0.5h)
+- **Total compute:** ~84-366 GPU-hours.
+- **Total LLM API cost** (estimate at Claude Sonnet 4 / Gemini 3.1 Pro rates): **$300-930** (was $300-1,500).
+
+---
+
+## 9. Risks & Mitigations
+
+| Risk | Probability | Impact | Mitigation |
+|---|---|---|---|
+| Upstream authors decline collaboration AND object to independent publication | 5-15% | High | Frame v2 as application + extension; ensure prominent v1 citation; prepare to re-frame if needed |
+| Phase 3 shows v2 ties or loses to v1 | 25-40% | High | Run pilot ablations early (Week 3-4); use early signal to re-scope publication if needed |
+| Insufficient GPU compute for multi-seed runs | 30% | Medium | Use small ML benchmark (Task 2) for ablations; reserve GPU for headline TimesFM runs only |
+| API cost overrun | 20% | Medium | Cap each ablation cell at $20 LLM spend; use Haiku for cheap ablation runs, Sonnet for headline |
+| Documentation drifts from code during Phase 3 | 50% | Low | Make Phase 1 last to finalize; keep README skeleton until Phase 3 done |
+| Reviewers want a third evaluation task (the GPU-scheduling one) | 40% | Medium | Note in paper that T3 was considered and cut for scope; available for revision. Can be added if reviewers require it |
+| Publication scoop by another group on hierarchical multi-agent science | 10-20% | High | arXiv preprint at **Week 6** (revised from Week 8) regardless of paper polish |
+| Framework breaking change in LLM Provider API mid-evaluation | 5-15% | Medium | Pin SDK version in `requirements.txt`; record API version in run logs; skill content bundled as markdown fallback (Phase 1.8) |
+
+---
+
+## 10. Immediate Actions (this week)
+
+In priority order:
+
+1. **Today / Day 1:** decide on Strategic Decision 1. Draft the upstream-author email. Send it.
+2. **Day 1-2:** create a `tests/` directory; write the first unit test (orchestrator escalation-signal parsing) — establishes the testing pattern for everything else.
+3. **Day 2-3:** write a 1-page ablation pre-registration document committing to specific metrics and seed protocol *before* running any ablations. Save as `EVALUATION_PROTOCOL.md`. Critical for credibility.
+4. **Day 3-5:** run a small Phase 3a pilot — ResearchGroup vs ResearchGroup v1 vs single-agent on a single TimesFM region with 1 seed. Use this to estimate effort and de-risk the full ablation.
+5. **Day 5-7:** based on pilot results, decide whether to commit to the full plan or re-scope. If pilot looks good, schedule the multi-seed runs.
+
+---
+
+## 11. Open Questions
+
+- **Naming.** Is "ResearchGroup" the right name, or should it be a distinct name (e.g., "ResearchGroup-H" for hierarchical, or a fresh name)? Decision affects upstream relationship and citation. Recommend resolving in the upstream-author conversation.
+- **Domain branding.** Should this be marketed as "general scientific optimization framework" or "ResearchGroup for ML optimization"? The first is venture-relevant (per the Apr 29 strategy meeting); the second is publication-relevant. Both can be true; the publication should pick one frame.
+- ~~**Open-sourcing the experiment context (`research_group_timesfm_expt.md`).**~~ **RESOLVED per board review (Brin):** Contains public equities and publicly available price data via yfinance. No proprietary information. Fine to release.
+- ~~**Skill content distribution.**~~ **RESOLVED per board review (Brin):** Bundle skill content as markdown files in `research_group/skills/*.md` with a loader fallback. Agent Skill API is the primary path; bundled files are the fallback for external users. See Phase 1 deliverable 1.8.
+
+---
+
+## 9a. Forecasting-Specific Fallback Paper Outline (added per board review: Munger)
+
+**Use this outline if T1 passes but T2 fails.** The headline becomes "Hierarchical multi-agent ResearchGroup for time-series forecasting optimization" — a domain paper, not a general framework paper.
+
+1. **Title:** "Hierarchical Multi-Agent Optimization of Time-Series Foundation Models: A Case Study with TimesFM"
+2. **Framing:** Application paper, not framework upgrade. v2 is the tool; TimesFM finetuning is the contribution.
+3. **Contribution claims (narrowed):**
+   - H1 (generalization from systems → forecasting) — confirmed
+   - H2 (hierarchy helps for forecasting) — confirmed on T1
+   - H3 (skill injection helps for forecasting) — confirmed on T1
+   - *Explicitly note:* "generality beyond forecasting is not demonstrated; T2 results were negative/neutral."
+4. **Venue targets:** Workshop (ML4Sys, AI4Science); NOT main-track framework venue.
+5. **Advantage:** faster to write, lower review bar, honest about scope.
+
+Having this outline ready means a T2 failure does not create a 2-week scramble to reframe.
+
+---
+
+## 12. Success Definition
+
+This plan succeeds if **at the end of 10 weeks** (revised from 16) the following are true:
+
+- [ ] An arXiv preprint is published describing ResearchGroup with the contribution claims (H2+H3 co-headlines) defended by ≥1-task multi-seed evaluation (≥2-task if T2 passes).
+- [ ] The GitHub repo has a clean public release with documentation, tests, CI, and a one-command reproduction.
+- [ ] At least one upstream ResearchGroup author has reviewed (formally or informally) the v2 contribution and either co-authored, endorsed, or non-objected to its publication.
+- [ ] Phase 3 results are quantitatively consistent (no overclaiming) and the negative results are reported alongside the positive ones.
+
+If any of those four are missing, the project is not done — the plan is recursive on whichever item is unfinished.
+
+
+================================================================================
+--- BEGIN DOCUMENT: EXPERIMENT CONTEXT ---
+================================================================================
+
+# TimesFM Finetuning — Experiment Context
+
+This file is loaded by the orchestrator at ResearchGroup start and injected into
+researcher prompts as `{experiment_context}`. It is NOT auto-loaded into
+every conversation — only read on demand.
+
+---
+
+## Mission
+
+TimesFM 2.5 (200M params, PyTorch decoder-only model) is being finetuned on financial
+time series data. The goal is to minimize MAPE (Mean Absolute Percentage Error) on
+held-out eval tickers at multiple forecast horizons.
+
+## Region Configs
+
+### Region: {region}
+
+**If region = us:**
+- Eval tickers (held-out): NVDA, UNH, GS, CVX, KO, BA
+- Eval training tickers (diagnostic): AAPL, MSFT, AMZN, GOOGL, META, JPM
+- Current best: Run 4 — 7.40% rolling MAPE at 120d (vs 8.08% baseline = +0.68pp)
+- Training: 10 S&P500 tickers (^GSPC, AAPL, JNJ, JPM, XOM, PG, CAT, NEE, AMT, WMT)
+- Training data: `finetune_usa/data/train/` or use `--tickers "^GSPC,AAPL,JNJ,JPM,XOM,PG,CAT,NEE,AMT,WMT"`
+- Checkpoint: `finetune_usa/checkpoints/best`
+
+**If region = china:**
+- Eval tickers (held-out): 0388.HK, 2382.HK, 1177.HK
+- Eval training tickers (diagnostic): 0700.HK, 0941.HK, 2318.HK, 1299.HK, 0005.HK, 0001.HK
+- Current best: ResearchGroup2a — 10.86% rolling MAPE (vs 17.48% baseline = +6.62pp)
+- Training ticker eval: -1.9pp at 120d (from evaluate_regional.py — may need re-verification with fixed script)
+- Training: 10 HK tickers
+- Checkpoint: `finetune_china/checkpoints/run_research_group_2a/best`
+
+**If region = japan:**
+- Eval tickers (held-out): 8035.T, 6902.T, 4661.T
+- Eval training tickers (diagnostic): 7203.T, 6758.T, 9984.T, 8306.T, 4502.T, 7974.T
+- Best (all horizons except 60d): hdecay_1.0 — horizon-weighted loss (decay=1.0), original 10tk data
+  - Checkpoint: `finetune_japan/checkpoints/run_research_group_t2_r2a/best`, val_loss=0.013
+- Best (60d only): semi_10tk — semiconductor-heavy 10-ticker training data
+  - Checkpoint: `finetune_japan/checkpoints/run_research_group_t1_r1a/best`, val_loss=0.020
+- Rolling eval (15 windows, 2026-03-28):
+  - 5d: hdecay_1.0 2.29% vs baseline 2.68% = **+0.39pp**
+  - 7d: hdecay_1.0 2.68% vs baseline 3.25% = **+0.57pp**
+  - 14d: hdecay_1.0 3.98% vs baseline 4.97% = **+0.99pp**
+  - 60d: semi_10tk 8.35% vs baseline 8.86% = **+0.52pp** (only model to beat baseline)
+  - 120d: hdecay_1.0 15.74% vs baseline 17.94% = **+2.20pp** (std 2.88%, borderline)
+- Key finding: horizon-weighted loss trades 60d for short+long gains. Data x loss interaction destructive.
+- 60d dead zone: structural, driven by 8035.T. Only semi_10tk fixes it.
+- Training data: `finetune_japan/data/train/` (10tk), `finetune_japan/data/train_semi/` (10 semi-heavy)
+
+**If region = europe:**
+- Eval tickers (held-out): UL, EADSF, VWAGY
+- Eval training tickers (diagnostic): ASML, SAP, NVO, AZN, SHEL, DEO
+- Current best: v2 17tk — 4.99% rolling MAPE (vs 5.14% baseline = +0.15pp marginal)
+- Training ticker eval: -1.8pp at 90d, -1.2pp at 120d (from evaluate_regional.py — may need re-verification with fixed script)
+- Training: 17 NYSE/NASDAQ-listed EU tickers
+- Checkpoint: `finetune_europe/checkpoints/run_research_group_v2_1a/best`
+
+## Cross-Market Findings (apply to all regions)
+
+- **Sector matching is critical:** Training tickers must be in same sectors as eval tickers
+- **Data dilution:** More tickers from unrelated sectors hurts, not helps
+- **Val loss != forecast quality:** Low val_loss doesn't guarantee low MAPE
+- **Val loss threshold:** Checkpoints with val_loss >0.015 produce NaN at inference
+- **Only recipe that works:** AdamW lr=1e-4, wd=0.01, freeze 17/20, cosine+5ep warmup, 10 sector-matched tickers
+- **Training ticker evaluation** is the best diagnostic for whether finetuning is learning
+
+## Known Dead Ends (do NOT retry)
+
+- SGD with small batches: can't move weights in 231M model
+- 100+ diverse tickers: dilutes signal -> regression
+- xreg at 60d+: diverges (corrections grow without damping)
+- Continuing from finetuned checkpoint: accumulated over-adaptation
+- 13+ tickers at LR=1e-4: risk NaN weights
+- Non-uniform layer selection: gradient analysis confirms monotonic pattern, no benefit
+- Mixed loss variants (alpha=0.8, 0.95, overall-dir): all tie at ceiling
+- BA in training set: too volatile, disrupts shared training distribution
+- Context=1024: regression (patch-position OOD for finetuned model)
+- LR=5e-5 or WD=0.05: NaN, can't reach convergence basin
+- Single-layer finetuning: NaN — layers 17-19 are tightly coupled minimum unit
+- Equal-weight ensemble: worse than best single checkpoint
+- Single-window evaluation: unreliable (~1pp noise). Always use rolling_eval.py (15+ windows)
+
+## File Paths and CLI
+
+**Working directory:** C:\Users\ylchen\workspace\timesfm
+
+**Training command template:**
+```
+cd C:\Users\ylchen\workspace\timesfm && source .venv/Scripts/activate && \
+python src/timesfm/finetune_timesfm.py \
+  --data-dir {data_dir} \
+  --epochs 50 \
+  --batch-size 8 \
+  --lr 1e-4 \
+  --optimizer adamw \
+  --weight-decay 0.01 \
+  --freeze-layers 17 \
+  --accumulation-steps 16 \
+  --warmup-epochs 5 \
+  --early-stopping 15 \
+  --save-dir {save_dir} \
+  --max-context 512 \
+  --horizon 128 \
+  --stride 32 \
+  --no-epoch-ckpts
+```
+
+**Evaluation command template:**
+```
+cd C:\Users\ylchen\workspace\timesfm && source .venv/Scripts/activate && \
+python scripts/evaluate_forecast.py \
+  --tickers "{eval_tickers}" \
+  --checkpoint {checkpoint_path} \
+  --horizons "5,14,30,60,90,120" \
+  --max-context 512
+```
+
+**Rolling evaluation (use for robust results):**
+Run once per horizon — you MUST evaluate at all key horizons [5, 14, 30, 60, 120]:
+```
+cd C:\Users\ylchen\workspace\timesfm && source .venv/Scripts/activate && \
+python scripts/rolling_eval.py \
+  --tickers "{eval_tickers}" \
+  --checkpoints {checkpoint_path} \
+  --n-windows 15 \
+  --horizon {horizon} \
+  --max-context 512
+```
+Run this command separately for each horizon in [5, 14, 30, 60, 120].
+
+**Regional evaluation (eval + training tickers in one pass):**
+```
+cd C:\Users\ylchen\workspace\timesfm && source .venv/Scripts/activate && \
+python scripts/evaluate_regional.py \
+  --region {region} \
+  --checkpoint {checkpoint_path}
+```
+Evaluates on BOTH held-out eval tickers AND a subset of training tickers
+(held-out windows). Training ticker results are diagnostic — they reveal
+whether the model learned useful patterns at all.
+
+**data:** C:\Users\ylchen\workspace\timesfm\finetune_{region}\data\
+**Checkpoints:** C:\Users\ylchen\workspace\timesfm\finetune_{region}\checkpoints\
+**Results dir:** C:\Users\ylchen\workspace\timesfm\finetune_{region}\finetune_expts\
+**timesfm2.5 baseline checkpoint:** C:\Users\ylchen\workspace\timesfm\model\
+
+## Constraints
+
+- Do NOT delete any existing checkpoints.
+- Do NOT modify model architecture files in src/timesfm/timesfm_2p5/ or src/timesfm/torch/.
+- You MAY modify src/timesfm/finetune_timesfm.py (e.g., add new loss terms).
+- You MAY modify scripts/evaluate_forecast.py (e.g., add new metrics).
+- You MAY write new helper scripts in the scripts/ directory.
+- Always use `--no-epoch-ckpts` when training (~880MB/epoch x 50 epochs = 45GB otherwise).
+- Label experiments clearly: checkpoints/run_research_group_{turn_number}a, run_research_group_{turn_number}b, etc.
+
+## Metrics
+
+- **Primary: MAPE** (lower is better). Report at horizons 5, 14, 30, 60, 90, 120 days.
+- **Secondary: DirAcc** (higher is better).
+- Always report BOTH metrics with per-ticker breakdown.
+- Use rolling evaluation (15+ windows) for definitive comparisons, not single-window.
+
+
+================================================================================
+--- BEGIN DOCUMENT: CLAUDE LOOP DEFINITION ---
+================================================================================
+
+# CLAUDE.md — ResearchGroup: Multi-Agent Hierarchical Orchestration
+
+This file is auto-loaded by Claude Code when opened in this directory.
+It defines the ResearchGroup optimization loop — a hierarchical multi-agent system
+with parallel researchers, domain-expert supervisors, and a strategic evaluator.
+
+---
+
+## Section 1 — Trigger
+
+When the user says any of the following:
+- "run research_group"
+- "start optimization"
+- "start loop"
+- "run research_group --max-turns N"
+- "run research_group --researchers N"
+- "run research_group --region REGION"
+
+Execute the **ResearchGroup loop** described in Section 2.
+
+Parse options:
+- `--max-turns N` (default: 18, divisible by 3 for clean evaluator cadence)
+- `--researchers N` (default: 2, max: 4)
+- `--region REGION` (default: us; options: us, china, japan, europe)
+
+---
+
+## Section 2 — ResearchGroup Loop Structure
+
+### 2.1 — Agent Roster
+
+| Agent | Count | Type | Skill | Cadence | Role |
+|-------|-------|------|-------|---------|------|
+| **Researcher** | 2-4 | code-developer | `/scientific-critical-thinking` | Every turn | Hypothesize, experiment, analyze |
+| **Supervisor-Stats** | 1 | general-purpose | `/scientific-critical-thinking` | Every turn + escalation | Statistical rigor, bias detection, evidence quality |
+| **Supervisor-Domain** | 1 | general-purpose | `/scientific-brainstorming` | Every turn + escalation | Cross-domain analogies, challenging assumptions |
+| **Supervisor-Methods** | 1 | general-purpose | `/timesfm-forecasting` | Every turn + escalation | TimesFM model expertise, ML optimization |
+| **Evaluator** | 1 | general-purpose | `/peer-review` | Every 3 turns + escalation | Strategic review, kill authority |
+
+**Skill integration:** Each agent receives skill content in its prompt via `{skill_content}`.
+The orchestrator loads skill content from `~/.claude/skills/` at the START of each ResearchGroup run
+(not every turn) and injects the relevant content into each agent's prompt.
+
+**Skill loading procedure (run ONCE at ResearchGroup start):**
+1. Read each SKILL.md file and its key references from `~/.claude/skills/`:
+   - `scientific-critical-thinking/SKILL.md` + `references/statistical_pitfalls.md`
+   - `scientific-brainstorming/SKILL.md` + `references/brainstorming_methods.md`
+   - `timesfm-forecasting/SKILL.md`
+   - `peer-review/SKILL.md` + `references/common_issues.md`
+2. Store the content in variables: `skill_critical_thinking`, `skill_brainstorming`,
+   `skill_timesfm`, `skill_peer_review`
+3. When spawning each agent, substitute `{skill_content}` with the appropriate skill:
+   - Researchers → `skill_critical_thinking` (methodology critique, bias detection, stats eval)
+   - Supervisor-Stats → `skill_critical_thinking`
+   - Supervisor-Domain → `skill_brainstorming`
+   - Supervisor-Methods → `skill_timesfm`
+   - Evaluator → `skill_peer_review`
+
+**Supervisor specializations:**
+- **Supervisor-Stats** (`/scientific-critical-thinking`): GRADE evidence assessment,
+  bias detection (confirmation, survivorship, p-hacking), statistical evaluation
+  (sample size, multiple comparisons, effect size vs significance), claim evaluation
+- **Supervisor-Domain** (`/scientific-brainstorming`): Cross-domain analogies (physics,
+  biology, network science), assumption reversal, scale shifting, constraint exploration,
+  interdisciplinary connections
+- **Supervisor-Methods** (`/timesfm-forecasting`): TimesFM 2.5 architecture (200M params,
+  decoder-only, 20 layers, patch_len=32), inference patterns, finetuning constraints
+  (val_loss threshold, layer coupling, context-length OOD)
+
+**Evaluator role** (`/peer-review`):
+- Structured evaluation: initial assessment → methodological rigor → statistical
+  rigor → reproducibility → issue classification (major/minor) → verdict
+- Kill authority — can terminate a research direction with justification
+- Access to full experiment history, not just recent turns
+- Evaluates whether the evaluation framework itself is adequate
+- Access to broad literature — recent patents, ArXiv publications
+
+### 2.2 — Important: Orchestrator Runs Experiments
+
+Researcher subagents lose Bash/Write access intermittently. Working pattern:
+- **Orchestrator** (you) runs training/evaluation commands directly via Bash
+- Researcher subagents are used for **analysis and planning** (Read/Grep/Glob only)
+- Supervisor/Evaluator subagents (general-purpose) always work fine
+- After each researcher returns a plan, the orchestrator executes the experiment,
+  then feeds the results back into the findings board
+
+### 2.3 — Loop Pseudocode
+
+```
+SETUP:
+  timestamp = current datetime formatted as YYYYMMDD_HHMMSS
+  output_dir = C:\Users\ylchen\workspace\timesfm\finetune_expts\research_group_run_{timestamp}
+  Create output_dir (using Bash: mkdir -p)
+  Initialize research_group_log.md in output_dir with header
+  Initialize findings_board.md in output_dir (shared read-only findings)
+
+  # Load experiment context (read ONCE, inject into researcher prompts)
+  experiment_context = Read("research_group_timesfm_expt.md")
+
+  # State variables
+  findings_board = ""        # Append-only, all researchers read this
+  supervisor_memos = {}      # Dict of latest memo per supervisor
+  evaluator_directive = ""   # Strategic guidance from evaluator
+  active_directions = []     # Research directions not yet killed
+  killed_directions = []     # Directions the evaluator has terminated
+  escalation_queue = []      # Events that trigger early supervisor/evaluator
+
+  max_turns = 18 (or value from --max-turns; divisible by 3 for clean evaluator cadence)
+  num_researchers = 2 (or value from --researchers)
+
+FOR turn_number = 1 to max_turns:
+
+  # ─── STEP 1: RESEARCHERS (parallel) ───────────────────────
+  #
+  # Launch all researchers in parallel. Each gets:
+  #   - The shared findings board (read-only)
+  #   - The latest supervisor memos
+  #   - The evaluator directive
+  #   - Its own researcher_id (R1, R2, ...)
+  #   - A distinct exploration direction (assigned at start or by evaluator)
+
+  researcher_outputs = {}
+  FOR i = 1 to num_researchers (IN PARALLEL):
+    researcher_outputs[i] = Call Agent(
+      subagent_type = "code-developer",
+      prompt = RESEARCHER_PROMPT_TEMPLATE (Section 3) with substitutions:
+        {researcher_id}       → "R{i}"
+        {turn_number}         → current turn number
+        {findings_board}      → findings_board variable
+        {supervisor_memos}    → formatted supervisor memos
+        {evaluator_directive} → evaluator_directive variable
+        {killed_directions}   → killed_directions list
+        {output_dir}          → output_dir path
+        {region}              → region from --region flag
+        {experiment_context}  → experiment_context variable (from research_group_timesfm_expt.md)
+    )
+
+  # Execute experiments planned by researchers (orchestrator runs Bash commands)
+  FOR each researcher_output in researcher_outputs:
+    IF researcher proposes a training/evaluation command:
+      Orchestrator executes the command via Bash
+      Append execution results to researcher_output
+
+  # Log all researcher outputs
+  FOR each researcher_output in researcher_outputs:
+    Append to research_group_log.md
+    Check for escalation signals: [ESCALATE], [BREAKTHROUGH], [STUCK], [NaN]
+
+  # Update findings board (append-only, each researcher writes ≤5 lines)
+  FOR each researcher_output in researcher_outputs:
+    Extract the "## Findings for Board" section (≤5 lines)
+    Append to findings_board with "Turn {turn_number} R{i}: ..."
+  Trim findings_board to last 6000 chars if over limit.
+
+  # Check for [DONE] from any researcher
+  IF any researcher_output contains "[DONE]":
+    Trigger evaluator for final review before stopping.
+
+  # ─── STEP 2: SUPERVISORS (every turn) ─────────────────────
+  #
+  # Each supervisor writes an INDEPENDENT memo.
+  # Supervisors do NOT see each other's memos (prevents anchoring).
+
+  IF True OR escalation_queue is not empty:  # supervisors run every turn
+
+    supervisor_outputs = {}
+    FOR each supervisor in [Stats, Domain, Methods] (IN PARALLEL):
+      # Invoke the supervisor's skill first to load methodology:
+      #   Stats → /scientific-critical-thinking
+      #   Domain → /scientific-brainstorming
+      #   Methods → /timesfm-forecasting
+      supervisor_outputs[supervisor] = Call Agent(
+        subagent_type = "general-purpose",
+        prompt = SUPERVISOR_PROMPT_TEMPLATE (Section 4) with substitutions:
+          {supervisor_role}     → supervisor specialization
+          {turn_number}         → current turn number
+          {researcher_outputs}  → all researcher outputs this turn
+          {findings_board}      → findings_board variable
+          {escalation_queue}    → any escalation signals
+          {evaluator_directive} → evaluator_directive variable
+      )
+
+    # Store latest memo per supervisor (overwrites previous)
+    FOR each supervisor, output in supervisor_outputs:
+      supervisor_memos[supervisor] = output
+      Append to research_group_log.md
+
+    Clear escalation_queue.
+
+    # Check for [APPROVED] from ALL supervisors
+    IF all supervisor_outputs start with "[APPROVED]":
+      Trigger evaluator for final review.
+
+  # ─── STEP 3: EVALUATOR (every 2 turns OR on escalation) ──
+  #
+  # Strategic review with kill authority.
+
+  IF turn_number % 2 == 0 OR evaluator_triggered:
+
+    # Invoke /peer-review skill to load structured evaluation framework
+    evaluator_output = Call Agent(
+      subagent_type = "general-purpose",
+      prompt = EVALUATOR_PROMPT_TEMPLATE (Section 5) with substitutions:
+        {turn_number}         → current turn number
+        {findings_board}      → FULL findings board
+        {supervisor_memos}    → ALL latest supervisor memos
+        {killed_directions}   → killed_directions list
+        {active_directions}   → active_directions list
+        {output_dir}          → output_dir path
+    )
+
+    Append to research_group_log.md.
+
+    # Parse evaluator directives
+    IF evaluator_output contains "[KILL: direction_name]":
+      Move direction_name from active_directions to killed_directions
+      Log: "Evaluator killed direction: {direction_name}"
+
+    IF evaluator_output contains "[REDIRECT: new_direction]":
+      Add new_direction to active_directions
+      Log: "Evaluator opened new direction: {new_direction}"
+
+    IF evaluator_output starts with "[TERMINATE]":
+      Write research_group_summary.md
+      Tell user "ResearchGroup complete — Evaluator terminated the run."
+      STOP
+
+    Set evaluator_directive = evaluator_output
+    Reset evaluator_triggered = False
+
+  # ─── STEP 4: UPDATE STATE ─────────────────────────────────
+
+  Continue to next turn.
+
+END:
+  If max_turns reached:
+    Trigger evaluator for final summary.
+    Write research_group_summary.md
+    Tell user "ResearchGroup reached max turns ({max_turns}). See research_group_log.md."
+```
+
+### 2.4 — Escalation Rules
+
+Escalation triggers **early** supervisor or evaluator intervention outside
+the regular cadence.
+
+**Researcher → Supervisor (immediate next step):**
+- `[NaN]` — Training produced NaN loss or predictions
+- `[STUCK]` — Same approach failed 2+ times, no new ideas
+- `[BREAKTHROUGH]` — Result that beats current best by >0.5pp
+
+**Supervisor → Evaluator (triggers evaluator before next even turn):**
+- `[CEILING]` — 3+ experiments with <0.1pp change, diminishing returns
+- `[PIVOT]` — A fundamental assumption challenged (e.g., evaluation framework is wrong)
+- `[RESOURCE]` — Disk/compute/time constraint reached
+- All 3 supervisors signal `[APPROVED]` simultaneously
+
+---
+
+## Section 3 — RESEARCHER_PROMPT_TEMPLATE
+
+Fill `{researcher_id}`, `{turn_number}`, `{findings_board}`,
+`{supervisor_memos}`, `{evaluator_directive}`, `{killed_directions}`,
+`{output_dir}`, `{region}`, `{experiment_context}` before sending.
+
+---
+
+You are Researcher {researcher_id} in a multi-agent optimization system called
+ResearchGroup (Turn {turn_number}).
+
+You are one of several researchers working in parallel. Your job is to discover
+improvements by working like a scientist: observe → hypothesize → experiment →
+analyze → refine.
+
+You have Read, Glob, and Grep tools. Use ABSOLUTE paths.
+
+**IMPORTANT:** You do NOT run training or evaluation commands directly. Instead,
+output a clear experiment plan with the exact command(s) to run. The orchestrator
+will execute them and feed results back to you.
+
+## Coordination Rules
+
+- **Read the findings board** before choosing your hypothesis. Do NOT repeat
+  experiments already reported there.
+- **Read killed directions** — do NOT pursue any direction the Evaluator killed.
+- Each researcher should explore a DIFFERENT hypothesis. If the findings board
+  shows another researcher is testing hypothesis X, choose a different one.
+- If you have no remaining viable hypotheses, signal `[DONE]`.
+
+## Shared Findings Board (read-only)
+
+{findings_board}
+
+## Supervisor Memos (latest from each domain expert)
+
+{supervisor_memos}
+
+## Evaluator Strategic Directive
+
+{evaluator_directive}
+
+## Killed Directions (DO NOT pursue)
+
+{killed_directions}
+
+## Experiment Context
+
+{experiment_context}
+
+**Loaded from:** `research_group_timesfm_expt.md` (read once at ResearchGroup start, injected here).
+Contains: region configs, tickers, checkpoints, cross-market findings, dead ends,
+CLI templates, constraints, and metrics. See Section 2.3 SETUP for loading.
+
+## Workflow for This Turn
+
+1. Read findings board and supervisor memos.
+2. Choose ONE hypothesis that no other researcher is pursuing.
+3. State your prediction: what result do you expect and why.
+4. Output the exact experiment commands for the orchestrator to run.
+5. (After orchestrator returns results) Analyze with per-ticker breakdown.
+6. State what you learned.
+
+## Output Format
+
+End your output with EXACTLY this section:
+
+```
+## Findings for Board
+
+- [1-line summary of hypothesis tested]
+- [1-line result: improved/regressed/neutral, key numbers]
+- [1-line implication: what this means for next steps]
+```
+
+This section is extracted and appended to the shared findings board.
+
+## Escalation Signals
+
+Prefix your output with one of these if applicable:
+- `[BREAKTHROUGH]` — You beat the current best by >0.5pp
+- `[NaN]` — Training produced NaN (triggers immediate supervisor review)
+- `[STUCK]` — You've tried 2+ approaches with no progress
+- `[DONE]` — No remaining viable hypotheses
+
+---
+
+## Section 4 — SUPERVISOR_PROMPT_TEMPLATE
+
+Fill `{supervisor_role}`, `{turn_number}`, `{researcher_outputs}`,
+`{findings_board}`, `{escalation_queue}`, `{evaluator_directive}` before sending.
+
+---
+
+You are Supervisor ({supervisor_role}) in ResearchGroup (Turn {turn_number}).
+
+Your specialization: **{supervisor_role}**
+
+- **Stats** (Scientific Critical Thinking): Statistical rigor, sample sizes, metric \
+validity, experimental design, confidence intervals, bias detection, evidence quality. \
+Ask: "Is this result statistically meaningful? Is the evaluation framework measuring \
+what we think it's measuring?"
+
+  Apply these frameworks:
+  - GRADE evidence assessment (downgrade for bias, inconsistency, imprecision)
+  - Bias detection (confirmation bias, survivorship bias, p-hacking, cherry-picking)
+  - Statistical evaluation (sample size, multiple comparisons, effect size vs significance)
+  - Claim evaluation (proportional confidence, causal vs correlational, limitations)
+
+- **Domain** (Scientific Brainstorming): Financial engineering, econo-physics, complex \
+systems, statistical physics. Cross-domain analogies, challenging assumptions. \
+Ask: "Does this make physical sense? Are these tickers structurally similar \
+enough for transfer learning? What domain knowledge is being ignored?"
+
+  Apply these techniques:
+  - Cross-domain analogies (physics, biology, network science)
+  - Assumption reversal (what if the opposite were true?)
+  - Scale shifting (ticker, sector, market, global; daily, weekly, regime)
+  - Constraint removal/addition (what structural constraints are we fighting?)
+
+- **Methods** (TimesFM Expertise): ML optimization, loss functions, regularization, \
+transfer learning, model architecture. Deep knowledge of TimesFM 2.5 internals. \
+Ask: "Is the training actually learning useful representations? \
+Could a different loss function, learning rate schedule, or freezing strategy help?"
+
+  Apply this model knowledge:
+  - Architecture: 200M params, decoder-only, patch_len=32, 20 layers, 1024 dims
+  - Finetuning constraints: val_loss >0.015 → NaN, layers 17-19 coupled, context OOD
+  - Transfer learning: patch-position embeddings adapt to training context length
+
+## Rules
+
+- Write an INDEPENDENT memo. You do NOT see other supervisors' memos.
+- Do NOT propose specific code changes or hyperparameter values.
+  Ask questions that lead the researcher to discover them.
+- Be concise: under 300 words.
+- Focus on your domain of expertise. Do not try to cover everything.
+
+## Researcher Outputs This Turn
+
+{researcher_outputs}
+
+## Findings Board
+
+{findings_board}
+
+## Escalation Signals
+
+{escalation_queue}
+
+## Evaluator Directive (strategic context)
+
+{evaluator_directive}
+
+## Known Dead Ends (remind researchers if they head here)
+
+See full list in `research_group_timesfm_expt.md`. Key ones:
+- Val loss <0.015 required or NaN at inference
+- Only recipe that works: AdamW lr=1e-4, wd=0.01, freeze 17/20, cosine+5ep warmup, 10 sector-matched tickers
+- Single-window evaluation: unreliable (~1pp noise), always use rolling_eval.py
+
+## Escalation Signals You Can Send
+
+If you observe any of these, prefix your memo:
+- `[CEILING]` — Diminishing returns detected across 3+ experiments
+- `[PIVOT]` — A fundamental assumption needs revisiting
+- `[RESOURCE]` — Resource constraints limit further experimentation
+- `[APPROVED]` — Research has reached a satisfactory conclusion in your domain
+
+## Tone
+
+Socratic. Ask 2-3 pointed questions. No lectures. No to-do lists.
+
+---
+
+## Section 5 — EVALUATOR_PROMPT_TEMPLATE
+
+Fill `{turn_number}`, `{findings_board}`, `{supervisor_memos}`,
+`{killed_directions}`, `{active_directions}`, `{output_dir}` before sending.
+
+---
+
+You are the Evaluator in ResearchGroup (Turn {turn_number}).
+
+You are the strategic authority in this research system. You have access to the
+full history of findings and all supervisor memos. Your role is analogous to a
+research director or grant review committee chair.
+
+You have access to broad literature — from recent patents, ArXiv publications,
+and the state of the art in time series forecasting, financial ML, and transfer learning.
+
+## Peer Review Framework
+
+Apply structured peer-review methodology to evaluate research quality:
+
+1. **Initial Assessment**: What is the central hypothesis? Are findings sound?
+2. **Methodological Rigor**: Are designs appropriate? Controls adequate? Confounders identified?
+3. **Statistical Rigor**: Assumptions met? Effect sizes reported? Multiple testing corrected?
+4. **Reproducibility**: Can results be replicated? Window-specific artifacts?
+5. **Issue Classification**: Major (threatens validity) vs Minor (affects interpretation)
+6. **Verdict**: For each direction — continue, kill, or redirect with justification
+
+## Your Powers
+
+1. **Kill authority**: You can terminate any research direction that has proven
+   unproductive. Use `[KILL: direction_name]` with justification.
+
+2. **Redirect authority**: You can open new research directions.
+   Use `[REDIRECT: new_direction_description]`.
+
+3. **Terminate authority**: You can end the entire run if you believe further
+   iteration will not yield improvement. Use `[TERMINATE]` at the start of
+   your output.
+
+4. **Evaluation critique**: You can challenge whether the evaluation framework
+   itself is adequate. This is one of your most important functions — researchers
+   optimize what's measured, so the measurement must be right.
+
+## Decision Framework
+
+Ask these questions in order:
+
+1. **Is the evaluation measuring the right thing?**
+   - Are there enough eval tickers? (n=3 per region has near-zero statistical power)
+   - Is MAPE the right metric for all horizons and price ranges?
+   - Are the eval tickers representative of what we actually want to forecast?
+   - Should we evaluate on training tickers too (held-out windows)?
+
+2. **Is there remaining headroom?**
+   - Look at the trajectory of improvements across experiments.
+   - If the last 3+ experiments moved <0.2pp, the ceiling is likely hit.
+   - Compare val_loss trajectory to MAPE trajectory — if they diverge, the
+     training objective doesn't align with the evaluation metric.
+
+3. **Are resources being spent wisely?**
+   - Each training run costs ~2-8 hours of compute.
+   - Is the expected improvement worth the compute cost?
+   - Are there cheaper experiments (e.g., analysis, different eval) that could
+     yield more insight than another training run?
+
+4. **What would a domain expert say?**
+   - Does the research direction make economic/statistical/methodological sense?
+   - Are we fighting a structural limitation (e.g., sector mismatch between
+     training and eval tickers)?
+   - Review supervisor memos for cross-domain insights.
+
+## Full Findings Board
+
+{findings_board}
+
+## All Supervisor Memos (latest)
+
+{supervisor_memos}
+
+## Currently Active Directions
+
+{active_directions}
+
+## Previously Killed Directions
+
+{killed_directions}
+
+## Output Format
+
+Structure your review as:
+
+```
+## Strategic Assessment
+[2-3 sentences on overall trajectory]
+
+## Direction Reviews
+[For each active direction: continue / kill / redirect, with reasoning]
+
+## Evaluation Framework
+[Is the current evaluation adequate? What should change?]
+
+## Directive for Next Cycle
+[Strategic guidance for researchers and supervisors]
+```
+
+Be decisive. It is better to kill a marginal direction early than to let it
+consume 5 more turns of compute. A well-justified kill is more valuable than
+a tentative "keep going."
+
+---
+
+## Section 6 — Logging Format
+
+### Turn-level logging
+
+Append to `{output_dir}/research_group_log.md` after each agent:
+
+```markdown
+## Turn {N} — Researcher R{i}
+
+{researcher_output}
+
+---
+```
+
+For supervisor turns (every turn):
+```markdown
+## Turn {N} — Supervisor (Stats)
+
+{supervisor_stats_output}
+
+## Turn {N} — Supervisor (Domain)
+
+{supervisor_domain_output}
+
+## Turn {N} — Supervisor (Methods)
+
+{supervisor_methods_output}
+
+---
+```
+
+For evaluator turns (every 2nd + escalation):
+```markdown
+## Turn {N} — Evaluator
+
+{evaluator_output}
+
+### Directives Issued
+- [KILL: ...] or [REDIRECT: ...] or none
+
+---
+```
+
+### Findings board
+
+Maintain `{output_dir}/findings_board.md` as an append-only log:
+
+```markdown
+# Findings Board
+
+## Turn 1
+- R1: [hypothesis] → [result] → [implication]
+- R2: [hypothesis] → [result] → [implication]
+
+## Turn 2
+...
+```
+
+### Summary
+
+At run end, write `{output_dir}/research_group_summary.md`:
+
+```markdown
+# ResearchGroup Run Summary
+
+Stop reason: {terminate|approved|max_turns}
+Turns completed: {N}
+Researchers: {num_researchers}
+Directions explored: {count}
+Directions killed: {killed_directions}
+Output dir: {output_dir}
+
+## Best Result
+[Configuration and metrics]
+
+## Key Insights
+[Top 3-5 findings, including negative results]
+
+## Evaluation Framework Recommendations
+[Any evaluator critiques of the eval setup]
+
+---
+
+{all turn outputs concatenated}
+```
+
+
